@@ -2,7 +2,7 @@
 
 https://www.botkube.io/
 
-![](https://i.imgur.com/yQ8sqtK.png)
+![](https://i.imgur.com/Z7JdN2a.png)
 
 * [botkube/botkube.yaml](botkube/botkube.yaml)
 
@@ -31,17 +31,24 @@ Metrics and observability collection and dashboard software - also installs graf
 * [prometheus-operator/prometheus-operator.yaml](prometheus-operator/prometheus-operator.yaml)
 * [prometheus-operator/prometheus-operator-helm-values.yaml](prometheus-operator/prometheus-operator-helm-values.yaml)
 
-# speedtest
+# speedtest-prometheus
 
 ![](https://i.imgur.com/avohPk6.png)
 
 ISP speed test results collector
 
-* [speedtest/speedtest.yaml](speedtest/speedtest.yaml)
+* [speedtest--prometheus/speedtest-prometheus.yaml](speedtest-prometheus/speedtest-prometheus.yaml)
 
-# uptimerobot
+# thanos
 
-Based on this [custom helm chart](https://github.com/billimek/billimek-charts/tree/master/uptimerobot)
+![](https://i.imgur.com/IeWqEIB.png)
 
-* [uptimerobot/uptimerobot.yaml](uptimerobot/uptimerobot.yaml)
-* [uptimerobot/uptimerobot-helm-values.yaml](uptimerobot/uptimerobot-helm-values.yaml)
+[Thanos](https://github.com/thanos-io/thanos) is a highly available Prometheus setup with long term storage capabilities.
+
+* [thanos/thanos.yaml](thanos/thanos.yaml)
+
+# uptimerobot-prometheus
+
+Based on this [custom helm chart](https://github.com/k8s-at-home/charts/tree/master/charts/uptimerobot-prometheus)
+
+* [uptimerobot-prometheus/uptimerobot-prometheus.yaml](uptimerobot-prometheus/-prometheusuptimerobot.yaml)

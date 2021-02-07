@@ -15,7 +15,7 @@ spec:
         app: intel-gpu-plugin
     spec:
       nodeSelector:
-        app: intel-gpu-plugin
+        feature.node.kubernetes.io/custom-intel-gpu: "true"
       containers:
       - name: intel-gpu-plugin
         env:
@@ -23,7 +23,7 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
-        image: billimek/intel-gpu-plugin:0.17.0
+        image: intel/intel-gpu-plugin:0.19.0
         imagePullPolicy: Always
         securityContext:
           readOnlyRootFilesystem: true

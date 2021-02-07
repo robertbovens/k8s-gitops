@@ -1,10 +1,8 @@
-# consul
+# descheduler
 
-![](https://i.imgur.com/pJDyame.png)
+Leveraging descheduler to automatically evict pods that no longer satisfy their NodeAffinity constraints.  This is used to work in concert with `node-feature-discovery` such that when USB devices are moved from one node to a different node, the pods requiring the USB devices will be properly forced to reschedule to the new location
 
-Deployed in support of running vault in HA mode.  Will likely deprecate whenever the [vault raft storage](https://www.vaultproject.io/docs/configuration/storage/raft.html) support is baked-in to the vault chart.
-
-* [consul/consul.yaml](consul/consul.yaml)
+* [descheduler/descheduler.yaml](descheduler/descheduler.yaml)
 
 # Intel GPU Plugin
 
@@ -47,11 +45,23 @@ nginx-ingress controller leveraging cert-manager as the central cert store for t
 
 * [nginx/](nginx/)
 
+# node-feature-discovery
+
+Using the USB feature of [node-feature-discovery](https://github.com/kubernetes-sigs/node-feature-discovery) to dynamically label nodes that contain specific USB devices we care about
+
+* [node-feature-discovery](node-feature-discovery/)
+
 # oauth2-proxy
 
 [OAuth2 authenticating proxy](https://github.com/pusher/oauth2_proxy) leveraging Auth0
 
 * [oauth2-proxy/](oauth2-proxy/)
+
+# registry-creds
+
+[registry-creds](https://github.com/alexellis/registry-creds): Automate Kubernetes registry credentials, to extend Docker Hub limits.  This is (sadly) necessary to have cluster-wide imagePulls use an authenticated Docker account so that the cluster doesn't get rate-limited and become unable to schedule workloads. This has already happened once.
+
+* [registry-creds/](registry-creds)
 
 # vault
 

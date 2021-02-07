@@ -7,7 +7,11 @@ export REPO_ROOT=$(git rev-parse --show-toplevel)
 export REPLIACS="0 1 2"
 
 need() {
-    which "$1" &>/dev/null || die "Binary '$1' is missing but required"
+    if ! command -v "$1" &> /dev/null
+    then
+        echo "Binary '$1' is missing but required"
+        exit 1
+    fi
 }
 
 need "vault"
@@ -77,6 +81,15 @@ initVault() {
         sed -i'' "s~VAULT_RECOVERY_TOKEN=\".*\"~VAULT_RECOVERY_TOKEN=\"$VAULT_RECOVERY_TOKEN\"~" "$REPO_ROOT"/setup/.env
     fi
     echo "SAVE THESE VALUES!"
+
+    REPLIACS_LIST=($REPLIACS)
+    echo "sleeping 10 seconds to allow first vault to be ready"
+    sleep 10
+    for replica in "${REPLIACS_LIST[@]:1}"; do
+      echo "joining pod vault-${replica} to raft cluster"
+      kubectl -n kube-system exec "vault-${replica}" -- vault operator raft join http://vault-0.vault-internal:8200 || exit 1
+    done
+
     FIRST_RUN=0
   fi
 
@@ -154,7 +167,7 @@ EOF
 
 loadSecretsToVault() {
   message "writing secrets to vault"
-  vault kv put secrets/flux/fluxcloud slack_url="$SLACK_WEBHOOK_URL"
+  vault kv put secrets/flux-system/discord-webhook address="$DISCORD_FLUX_WEBHOOK_URL"
   vault kv put secrets/kube-system/nginx-basic-auth-jeff auth="$JEFF_AUTH"
   vault kv put secrets/cert-manager/cloudflare-api-key api-key="$CF_API_KEY"
 
@@ -163,26 +176,27 @@ loadSecretsToVault() {
   ####################
   kvault "kube-system/kured/kured-helm-values.txt"
   kvault "kube-system/oauth2-proxy/oauth2-proxy-helm-values.txt"
+  kvault "logs/loki/loki-helm-values.txt"
   kvault "monitoring/botkube/botkube-helm-values.txt"
-  kvault "monitoring/prometheus-operator/prometheus-operator-helm-values.txt"
-  kvault "monitoring/uptimerobot/uptimerobot-helm-values.txt"
-  kvault "default/blocky/blocky-helm-values.txt"
+  kvault "monitoring/grafana/grafana-helm-values.txt"
+  kvault "monitoring/kube-prometheus-stack/kube-prometheus-stack-helm-values.txt"
+  kvault "monitoring/thanos/thanos-helm-values.txt"
+  kvault "monitoring/uptimerobot-prometheus/uptimerobot-prometheus-helm-values.txt"
   kvault "default/frigate/frigate-helm-values.txt"
-  kvault "default/goldilocks/goldilocks-helm-values.txt"
   kvault "default/home-assistant/home-assistant-helm-values.txt"
-  kvault "default/home-assistant/postgresql-helm-values.txt"
-  kvault "default/hubot/hubot-helm-values.txt"
   kvault "default/minio/minio-helm-values.txt"
-  kvault "default/node-red/node-red-helm-values.txt"
-  kvault "default/nzbget/nzbget-helm-values.txt"
+  kvault "default/monica/monica-helm-values.txt"
   kvault "default/plex/plex-helm-values.txt"
-  kvault "default/radarr/radarr-helm-values.txt"
   kvault "default/rtorrent-flood/rtorrent-flood-helm-values.txt"
-  kvault "default/sonarr/sonarr-helm-values.txt"
   kvault "default/teslamate/teslamate-helm-values.txt"
-  kvault "default/unifi/unifi-helm-values.txt"
-  kvault "default/zwave2mqtt/zwave2mqtt-helm-values.txt"
   kvault "velero/velero/velero-helm-values.txt"
+}
+
+loadSecretsToVault-oneoff() {
+  message "writing secrets to vault"
+  # kvault "monitoring/kube-prometheus-stack/kube-prometheus-stack-helm-values.txt"
+  kvault "monitoring/grafana/grafana-helm-values.txt"
+
 }
 
 FIRST_RUN=1
@@ -195,6 +209,7 @@ loginVault
 if [ $FIRST_RUN == 0 ]; then 
   setupVaultSecretsOperator
 fi
-loadSecretsToVault
+# loadSecretsToVault
+loadSecretsToVault-oneoff
 
 kill $VAULT_FWD_PID

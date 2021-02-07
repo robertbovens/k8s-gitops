@@ -1,26 +1,27 @@
-apiVersion: helm.fluxcd.io/v1
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: nfs-client-provisioner
   namespace: kube-system
-  annotations:
-    fluxcd.io/automated: "true"
-    fluxcd.io/tag.chart-image: semver:~v3.1
 spec:
-  releaseName: nfs-client-provisioner
-  helmVersion: v3
-  rollback:
-    enable: true
+  interval: 5m
   chart:
-    repository: https://kubernetes-charts.storage.googleapis.com/
-    name: nfs-client-provisioner
-    version: 1.2.8
+    spec:
+      # renovate: registryUrl=https://charts.helm.sh/stable
+      chart: nfs-client-provisioner
+      version: 1.2.11
+      sourceRef:
+        kind: HelmRepository
+        name: kubernetes-stable-charts
+        namespace: flux-system
+      interval: 5m
   values:
     image:
       repository: quay.io/external_storage/nfs-client-provisioner
       tag: v3.1.0-k8s1.11
     nfs:
       server: "10.0.7.7"
-      path: "/tank/data/k8s-nfs"
+      path: "/mnt/tank/data/k8s-nfs"
     storageClass:
-      defaultClass: true
+      defaultClass: false

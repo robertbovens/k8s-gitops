@@ -1,27 +1,38 @@
-apiVersion: helm.fluxcd.io/v1
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: kured
   namespace: kube-system
-  annotations:
-    fluxcd.io/automated: "true"
-    fluxcd.io/tag.chart-image: semver:~1
 spec:
-  releaseName: kured
-  helmVersion: v3
+  interval: 5m
   chart:
-    repository: https://kubernetes-charts.storage.googleapis.com/
-    name: kured
-    version: 1.5.0
+    spec:
+      # renovate: registryUrl=https://weaveworks.github.io/kured
+      chart: kured
+      version: 2.3.1
+      sourceRef:
+        kind: HelmRepository
+        name: weaveworks-kured-charts
+        namespace: flux-system
+      interval: 5m
   values:
     image:
       repository: raspbernetes/kured
-      tag: 1.3.0
+      tag: 1.6.1
+      pullPolicy: Always # the 1.5.1 tag was reused to fix a bug, forcing pull for this version only
+    configuration:
+      startTime: "0:00"
+      endTime: "4:00"
+      timeZone: "America/New_York"
     tolerations:
-      - key: "arm"
-        operator: "Exists"
-      - key: "armhf"
-        operator: "Exists"
-  valueFileSecrets:
-  - name: "kured-helm-values"
-
+    - key: "arm"
+      operator: "Exists"
+    - key: "node-role.kubernetes.io/master"
+      operator: "Exists"
+    metrics:
+      create: true
+  valuesFrom:
+  - kind: Secret
+    name: "kured-helm-values"
+    optional: false

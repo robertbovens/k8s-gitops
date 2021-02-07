@@ -11,7 +11,14 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   nfs:
     server: 10.0.7.7
-    path: "/tank/data"
+    path: "/mnt/tank/data"
+  mountOptions:
+  - nfsvers=3
+  - tcp
+  - intr
+  - hard
+  - noatime
+  - nodiratime
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

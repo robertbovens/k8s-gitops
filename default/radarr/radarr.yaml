@@ -1,30 +1,39 @@
 ---
-apiVersion: helm.fluxcd.io/v1
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
 kind: HelmRelease
 metadata:
   name: radarr
   namespace: default
-  annotations:
-    fluxcd.io/automated: "false"
-    fluxcd.io/tag.chart-image: semver:3.0
 spec:
-  releaseName: radarr
-  helmVersion: v3
-  rollback:
-    enable: true
+  interval: 5m
   chart:
-    repository: https://billimek.com/billimek-charts/
-    name: radarr
-    version: 3.2.0
+    spec:
+      # renovate: registryUrl=https://k8s-at-home.com/charts/
+      chart: radarr
+      version: 8.4.0
+      sourceRef:
+        kind: HelmRepository
+        name: k8s-at-home-charts
+        namespace: flux-system
+      interval: 5m
   values:
     image:
-      repository: linuxserver/radarr
-      tag: 3.0.0.2719-ls1
+      repository: k8sathome/radarr
+      tag: v3.0.2.4552
+    env:
+      TZ: "America/New_York"
     ingress:
       enabled: true
       annotations:
         kubernetes.io/ingress.class: "nginx"
-    timezone: "America/New_York"
+      hosts:
+      - host: radarr.eviljungle.com
+        paths:
+        - path: /
+          pathType: Prefix
+      tls:
+      - hosts:
+        - "radarr.eviljungle.com"
     podAnnotations:
       backup.velero.io/backup-volumes: config
     persistence:
@@ -32,20 +41,19 @@ spec:
         enabled: true
         storageClass: "rook-ceph-block"
         size: 3Gi
-      downloads:
-        enabled: false
-      movies:
-        enabled: false
-      extraExistingClaimMounts:
-        - name: media
-          existingClaim: nfs-media-pvc
-          mountPath: /media
-          readOnly: false
+      media:
+        enabled: true
+        existingClaim: nfs-media-pvc
+    podSecurityContext:
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
     resources:
       requests:
         memory: 350Mi
         cpu: 25m
       limits:
         memory: 500Mi
-  valueFileSecrets:
-  - name: "radarr-helm-values"
+    tolerations:
+    - key: "arm"
+      operator: "Exists"
