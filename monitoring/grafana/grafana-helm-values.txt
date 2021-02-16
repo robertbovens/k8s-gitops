@@ -1,5 +1,7 @@
 adminUser: jeff@billimek.com
 adminPassword: "$GRAFANA_PASSWORD"
+env:
+  TESLAMATE_DB_PASSWORD: "$TESLAMATE_DB_PASSWORD"
 grafana.ini:
   auth.generic_oauth:
     enabled: true
