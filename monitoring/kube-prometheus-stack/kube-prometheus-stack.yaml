@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      version: 13.7.2
+      version: 13.13.1
       sourceRef:
         kind: HelmRepository
         name: prometheus-community-charts
@@ -97,7 +97,6 @@ spec:
       serviceMonitor:
         relabelings:
         - sourceLabels: [__meta_kubernetes_pod_node_name]
-          targetLabel: nodename
           targetLabel: instance
           action: replace
     # kubelet:

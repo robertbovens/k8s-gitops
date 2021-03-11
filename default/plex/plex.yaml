@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://k8s-at-home.com/charts/
       chart: plex
-      version: 2.3.0
+      version: 2.3.1
       sourceRef:
         kind: HelmRepository
         name: k8s-at-home-charts
@@ -19,7 +19,7 @@ spec:
   values:
     image:
       repository: plexinc/pms-docker
-      tag: 1.21.3.4021-5a0a3e4b2
+      tag: 1.22.0.4163-d8c4875dd
     podAnnotations:
       backup.velero.io/backup-volumes: config
     ingress:
