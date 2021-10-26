@@ -8,12 +8,12 @@ spec:
   interval: 5m
   chart:
     spec:
-      # renovate: registryUrl=https://charts.bitnami.com/bitnami
+      # renovate: registryUrl=https://metallb.github.io/metallb
       chart: metallb
-      version: 1.1.0
+      version: 0.10.3
       sourceRef:
         kind: HelmRepository
-        name: bitnami-charts
+        name: metallb-charts
         namespace: flux-system
       interval: 5m
   values:
@@ -37,20 +37,20 @@ spec:
       prometheusRule:
         enabled: true
     controller:
-      image:
-        registry: docker.io
-        repository: metallb/controller
-        tag: v0.9.5
+      # image:
+      #   repository: quay.io/metallb/controller
+      #   tag: v0.10.1
       tolerations:
       - key: "arm"
         operator: "Exists"
     speaker:
-      image:
-        registry: docker.io
-        repository: metallb/speaker
-        tag: v0.9.5
+      # image:
+      #   repository: quay.io/metallb/speaker
+      #   tag: v0.10.1
       tolerations:
       - key: "arm"
         operator: "Exists"
       - key: "armhf"
+        operator: "Exists"
+      - key: "node-role.kubernetes.io/master"
         operator: "Exists"

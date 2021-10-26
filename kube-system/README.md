@@ -1,6 +1,12 @@
+# coredns
+
+Using this specific [coredns](https://github.com/coredns/coredns) deployment to manage an internal DNS zone for support split-brain DNS for the home network (so that the same host will resolve properly for clients on the internal network as well as the external network).  [This issue](https://github.com/billimek/k8s-gitops/issues/153) explored the problem and landed on this solution.
+
+* [coredns/coredns.yaml](coredns/coredns.yaml)
+
 # descheduler
 
-Leveraging descheduler to automatically evict pods that no longer satisfy their NodeAffinity constraints.  This is used to work in concert with `node-feature-discovery` such that when USB devices are moved from one node to a different node, the pods requiring the USB devices will be properly forced to reschedule to the new location
+Leveraging [descheduler](https://github.com/kubernetes-sigs/descheduler) to automatically evict pods that no longer satisfy their NodeAffinity constraints.  This is used to work in concert with `node-feature-discovery` such that when USB devices are moved from one node to a different node, the pods requiring the USB devices will be properly forced to reschedule to the new location
 
 * [descheduler/descheduler.yaml](descheduler/descheduler.yaml)
 
@@ -41,7 +47,7 @@ nfs-based persistent mounts for various pod access (media mount & data mount)
 
 ![](https://i.imgur.com/b21MHEE.png)
 
-nginx-ingress controller leveraging cert-manager as the central cert store for the wildcard certificate
+[ingress-nginx](https://github.com/kubernetes/ingress-nginx) controller leveraging cert-manager as the central cert store for the wildcard certificate
 
 * [nginx/](nginx/)
 
@@ -62,6 +68,12 @@ Using the USB feature of [node-feature-discovery](https://github.com/kubernetes-
 [registry-creds](https://github.com/alexellis/registry-creds): Automate Kubernetes registry credentials, to extend Docker Hub limits.  This is (sadly) necessary to have cluster-wide imagePulls use an authenticated Docker account so that the cluster doesn't get rate-limited and become unable to schedule workloads. This has already happened once.
 
 * [registry-creds/](registry-creds)
+
+# reloader
+
+[reloader](https://github.com/stakater/Reloader): A Kubernetes controller to watch changes in ConfigMap and Secrets and do rolling upgrades on Pods with their associated Deployment, StatefulSet, DaemonSet and DeploymentConfig
+
+* [reloader/](reloader/reloader.yaml)
 
 # vault
 
@@ -113,10 +125,12 @@ env | grep -E 'VAULT_SECRETS_OPERATOR_NAMESPACE|VAULT_SECRET_NAME|SA_JWT_TOKEN|S
 vault auth enable kubernetes
 
 # Tell Vault how to communicate with the Kubernetes cluster
+
 vault write auth/kubernetes/config \
   token_reviewer_jwt="$SA_JWT_TOKEN" \
   kubernetes_host="$K8S_HOST" \
-  kubernetes_ca_cert="$SA_CA_CRT"
+  kubernetes_ca_cert="$SA_CA_CRT" \
+  disable_iss_validation=true
 
 # Create a role named, 'vault-secrets-operator' to map Kubernetes Service Account to Vault policies and default token TTL
 vault write auth/kubernetes/role/vault-secrets-operator \
@@ -125,3 +139,5 @@ vault write auth/kubernetes/role/vault-secrets-operator \
   policies=vault-secrets-operator \
   ttl=24h
 ```
+
+**NOTE: We are disabling "ISS Validation" to work-around [this issue](https://github.com/ricoberger/vault-secrets-operator/issues/104) (also see [this issue](https://github.com/external-secrets/kubernetes-external-secrets/issues/721) for some more context)**

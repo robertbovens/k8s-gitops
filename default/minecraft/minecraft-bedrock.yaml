@@ -24,10 +24,10 @@ spec:
         Size: 10Gi
     resources:
       requests:
-        memory: 512Mi
-        cpu: 500m
+        memory: 250Mi
+        cpu: 100m
       limits:
-        memory: 1000Mi
+        memory: 250Mi
     podAnnotations:
       backup.velero.io/backup-volumes: datadir
     minecraftServer:
@@ -35,7 +35,9 @@ spec:
       version: "LATEST"
       difficulty: normal
       gameMode: survival
+      ops: "2535432067443552"
       levelName: world
-      serverName: "billimek minecraft (survival)"
+      serverName: "\u00a79Lovely \u00a7c\u00a7lSMP\u00a7c\u00a7l\u00a7k!"
+      cheats: true
       serviceType: LoadBalancer
       loadBalancerIP: 10.0.6.103

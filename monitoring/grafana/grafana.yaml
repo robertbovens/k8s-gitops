@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://grafana.github.io/helm-charts
       chart: grafana
-      version: 6.4.8
+      version: 6.17.3
       sourceRef:
         kind: HelmRepository
         name: grafana-charts
@@ -39,6 +39,7 @@ spec:
       GF_DISABLE_SANITIZE_HTML: true
       GF_PANELS_DISABLE_SANITIZE_HTML: true
       GF_LOG_FILTERS: rendering:debug
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "panodata-map-panel"
     ingress:
       enabled: true
       annotations:
@@ -53,9 +54,12 @@ spec:
     - grafana-piechart-panel
     - grafana-clock-panel
     - vonage-status-panel
-    - https://github.com/panodata/grafana-map-panel/releases/download/0.15.0/grafana-map-panel-0.15.0.zip;grafana-worldmap-panel-ng
+    - grafana-worldmap-panel
+    - https://github.com/panodata/panodata-map-panel/releases/download/0.16.0/panodata-map-panel-0.16.0.zip;grafana-map-panel
     serviceMonitor:
       enabled: true
+    serviceAccount:
+      autoMount: true
     dashboardProviders:
       dashboardproviders.yaml:
         apiVersion: 1
@@ -81,9 +85,9 @@ spec:
       default:
         1-node-exporter:
           url: https://grafana.com/api/dashboards/11074/revisions/9/download
-          datasource: Prometheus 
+          datasource: Prometheus
         blocky:
-          url: https://raw.githubusercontent.com/0xERR0R/blocky/v0.12/docs/blocky-grafana.json
+          url: https://raw.githubusercontent.com/0xERR0R/blocky/v0.16/docs/blocky-grafana.json
           datasource: Prometheus
         cable-modem-stats:
           url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/cable_modem_stats.json
@@ -107,19 +111,20 @@ spec:
           url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/comcast_sucks.json
           # datasource: influxdb
         flux-cluster:
-          url: https://raw.githubusercontent.com/fluxcd/flux2/v0.7.6/manifests/monitoring/grafana/dashboards/cluster.json
+          url: https://raw.githubusercontent.com/fluxcd/flux2/main/manifests/monitoring/grafana/dashboards/cluster.json
           datasource: Prometheus
         flux-control-plane:
-          url: https://raw.githubusercontent.com/fluxcd/flux2/v0.7.6/manifests/monitoring/grafana/dashboards/control-plane.json
+          url: https://raw.githubusercontent.com/fluxcd/flux2/main/manifests/monitoring/grafana/dashboards/control-plane.json
           datasource: Prometheus
-        # frigate:
-        #   url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/frigate.json
-        #   datasource: influxdb
+        frigate:
+          url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/frigate.json
+          datasource: Prometheus
         home-assistant:
           url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/home_assistant.json
           datasource: home_assistant
         internet-speed:
-          url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/internet_speed.json
+          gnetId: 13665
+          revision: 1
           datasource: Prometheus
         minio-overview:
           url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/minio_overview.json
@@ -128,7 +133,8 @@ spec:
           url: https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/grafana/dashboards/nginx.json
           datasource: Prometheus
         node-exporter-full:
-          url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/node_exporter_full.json
+          gnetId: 1860
+          revision: 23
           datasource: Prometheus
         prometheus-exporter-summary:
           url: https://raw.githubusercontent.com/billimek/k8s-gitops/master/monitoring/grafana/dashboards/prometheus_exporter_summary.json
@@ -162,9 +168,6 @@ spec:
         uptimerobot:
           url: https://raw.githubusercontent.com/lekpamartin/uptimerobot_exporter/master/dashboards/grafana.json
           datasource: Prometheus
-        vernemq:
-          url: https://raw.githubusercontent.com/vernemq/vernemq/master/metrics_scripts/grafana/VerneMQ%20Node%20Metrics.json
-          datasource: Prometheus
         velero:
           url: https://grafana.com/api/dashboards/11055/revisions/2/download
           datasource: Prometheus
@@ -173,54 +176,60 @@ spec:
           datasource: Prometheus
       teslamate:
         charge-level:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/charge-level.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/charge-level.json
           # datasource: TeslaMate
         charges:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/charges.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/charges.json
           # datasource: TeslaMate
         charging-stats:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/charging-stats.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/charging-stats.json
           # datasource: TeslaMate
         drive-stats:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/drive-stats.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/drive-stats.json
           # datasource: TeslaMate
         drives:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/drives.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/drives.json
           # datasource: TeslaMate
         efficiency:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/efficiency.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/efficiency.json
           # datasource: TeslaMate
         locations:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/locations.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/locations.json
           # datasource: TeslaMate
         mileage:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/mileage.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/mileage.json
           # datasource: TeslaMate
         overview:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/overview.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/overview.json
           # datasource: TeslaMate
         projected-range:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/projected-range.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/projected-range.json
           # datasource: TeslaMate
         states:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/states.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/states.json
+          # datasource: TeslaMate
+        statistics:
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/statistics.json
+          # datasource: TeslaMate
+        timeline:
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/timeline.json
           # datasource: TeslaMate
         trip:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/trip.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/trip.json
           # datasource: TeslaMate
         updates:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/updates.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/updates.json
           # datasource: TeslaMate
         vampire-drain:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/vampire-drain.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/vampire-drain.json
           # datasource: TeslaMate
         visited:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/visited.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/visited.json
           # datasource: TeslaMate
         charge-details:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/internal/charge-details.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/internal/charge-details.json
         drive-details:
-          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.21.5/grafana/dashboards/internal/drive-details.json
+          url: https://raw.githubusercontent.com/adriankumpf/teslamate/v1.24.2/grafana/dashboards/internal/drive-details.json
     sidecar:
       datasources:
         enabled: true
@@ -240,7 +249,7 @@ spec:
         - name: Prometheus
           type: prometheus
           access: proxy
-          url: http://thanos-query-http:10902/
+          url: http://thanos-query:9090/
           isDefault: true
         - name: loki
           type: loki

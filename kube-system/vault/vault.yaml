@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://helm.releases.hashicorp.com
       chart: vault
-      version: 0.9.1
+      version: 0.17.0
       sourceRef:
         kind: HelmRepository
         name: hashicorp-charts
@@ -39,9 +39,9 @@ spec:
         limits:
           memory: 256Mi
       standalone:
-        enabled: "false"
+        enabled: false
       ha:
-        enabled: "true"
+        enabled: true
         replicas: 3
         raft:
           enabled: true

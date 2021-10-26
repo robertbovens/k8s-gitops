@@ -6,6 +6,13 @@ Installs [blocky](https://github.com/0xERR0R/blocky): DNS proxy as ad-blocker fo
 
 * [blocky.yaml](blocky/blocky.yaml)
 
+# emqx
+
+![](https://i.imgur.com/uNxxBGX.png)
+
+[emqx](github.com/emqx/emqx) is a clustered MQTT broker
+
+* [emqx.yaml](emqx/emqx.yaml)
 # flood (with rtorrent sidecar)
 
 ![](https://i.imgur.com/ZtMrsbm.png)
@@ -32,33 +39,38 @@ Installs [goldilocks](https://github.com/FairwindsOps/goldilocks): to help with 
 
 # home-assistant
 
+[Home-Assistant](https://github.com/home-assistant/core) is an opensource home automation solution.
+
 ![](https://i.imgur.com/04TtJFw.png)
 
 * [home-assistant.yaml](home-assistant/home-assistant.yaml)
-* Home Assistant configuration & settings are persisted to a [configuration repo](https://github.com/billimek/home-assistant-config) 
-
-# hubot
-
-A bot for slack
-
-* [hubot.yaml](hubot/hubot.yaml)
+* Home Assistant configuration & settings are persisted to a [configuration repo](https://github.com/billimek/home-assistant-config)
 
 # minecraft
+
+Using the [minecraft server](https://hub.docker.com/r/itzg/minecraft-server) container images to run multiple different minecraft servers.
 
 ![](https://i.imgur.com/zBha0RP.png)
 
 * [minecraft-creative.yaml](minecraft/minecraft-creative.yaml)
 * [minecraft-survival.yaml](minecraft/minecraft-survival.yaml)
-* [minecraft-bedrock-creative.yaml](minecraft/minecraft-bedrock-creative.yaml)
-* [minecraft-bedrock-survival.yaml](minecraft/minecraft-bedrock-survival.yaml)
+* [minecraft-bedrock.yaml](minecraft/minecraft-bedrock.yaml)
 
 # minio
+
+[Minio](https://github.com/minio/minio) is a high performance S3-compatible kubernetes object storage solution.
 
 ![](https://i.imgur.com/RF0aYAg.png)
 
 S3-compatible bucket storage service
 
 * [minio.yaml](minio/minio.yaml)
+
+# monica
+
+[Monica](https://github.com/monicahq/monica) is an opensource Source personal CRM.
+
+* [monica.yaml](monica/monica.yaml)
 
 # node-red
 
@@ -73,7 +85,7 @@ Rules-engine for automations
 
 ![](https://i.imgur.com/2KQbi2w.png)
 
-Usenet download client
+[Nzbget](https://github.com/nzbget/nzbget) is an efficient usenet downloading client.
 
 * [nzbget.yaml](nzbget/nzbget.yaml)
 
@@ -81,15 +93,25 @@ Usenet download client
 
 ![](https://i.imgur.com/nDyS9OA.jpg)
 
+[Plex](https://www.plex.tv/) is a home media solution.
+
 * [plex.yaml](plex/plex.yaml)
 
 # radarr
 
 ![](https://i.imgur.com/eAgWySC.png)
 
-movie downloader
+[Radarr](https://github.com/Radarr/Radarr) is a movie downloader
 
 * [radarr.yaml](radarr/radarr.yaml)
+
+# readarr
+
+![](https://i.imgur.com/jc5Ftcr.png)
+
+[Readarr](https://github.com/Readarr/Readarr) is an ebook/audiobook organizer
+
+* [readarr.yaml](readarr/readarr.yaml)
 
 # ser2sock
 
@@ -101,7 +123,7 @@ movie downloader
 
 ![](https://i.imgur.com/0CS5ADs.png)
 
-tv show downloader
+[Sonarr](https://github.com/Sonarr/Sonarr) is a tv show downloader
 
 * [sonarr.yaml](sonarr/sonarr.yaml)
 
@@ -126,22 +148,23 @@ tv show downloader
 
 ![](https://i.imgur.com/uakfLZo.png)
 
-ubiquiti unifi controller for wireless access points
+[ubiquiti unifi controller](https://github.com/jacobalberty/unifi-docker) for wireless access points and home networking
 
 * [unifi.yaml](unifi/unifi.yaml)
 
-# verenmq
+# valheim
 
-![](https://i.imgur.com/VQ5AZIV.png)
+![](https://i.imgur.com/R1Jvrsr.jpg)
 
-[verenmq](https://github.com/vernemq/vernemq) is a clustered MQTT broker
+[Valheim](https://github.com/lloesche/valheim-server-docker) game server
 
-* [verenmq.yaml](verenmq/verenmq.yaml)
+* [valheim.yaml](valheim/valheim.yaml)
 
-# zwave2mqtt
 
-![](https://i.imgur.com/p0hlTFG.png)
+# zwavejs2mqtt
 
-[zwave2mqtt](https://github.com/OpenZWave/Zwave2Mqtt) for controlling zwave devices from a connected zwave controller and publishing over MQTT
+![](https://i.imgur.com/Odhu4gJ.png)
 
-* [zwave2mqtt.yaml](zwave2mqtt/zwave2mqtt.yaml)
+[zwavejs2mqtt](https://github.com/zwave-js/zwavejs2mqtt) for controlling z-wave devices from a connected zwave controller and publishing over MQTT or websocket
+
+* [zwavejs2mqtt.yaml](zwavejs2mqtt/zwavejs2mqtt.yaml)

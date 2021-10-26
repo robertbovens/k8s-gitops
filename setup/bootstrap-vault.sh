@@ -41,9 +41,9 @@ initVault() {
   while [ $VAULT_READY != 0 ]; do
     kubectl -n kube-system wait --for condition=Initialized pod/vault-0 > /dev/null 2>&1
     VAULT_READY="$?"
-    if [ $VAULT_READY != 0 ]; then 
+    if [ $VAULT_READY != 0 ]; then
       echo "waiting for vault pod to be somewhat ready..."
-      sleep 10; 
+      sleep 10;
     fi
   done
   sleep 2
@@ -182,20 +182,23 @@ loadSecretsToVault() {
   kvault "monitoring/kube-prometheus-stack/kube-prometheus-stack-helm-values.txt"
   kvault "monitoring/thanos/thanos-helm-values.txt"
   kvault "monitoring/uptimerobot-prometheus/uptimerobot-prometheus-helm-values.txt"
+  kvault "default/emqx/emqx-helm-values.txt"
   kvault "default/frigate/frigate-helm-values.txt"
   kvault "default/home-assistant/home-assistant-helm-values.txt"
-  kvault "default/minio/minio-helm-values.txt"
   kvault "default/monica/monica-helm-values.txt"
   kvault "default/plex/plex-helm-values.txt"
   kvault "default/rtorrent-flood/rtorrent-flood-helm-values.txt"
   kvault "default/teslamate/teslamate-helm-values.txt"
+  kvault "default/valheim/valheim-helm-values.txt"
   kvault "velero/velero/velero-helm-values.txt"
 }
 
 loadSecretsToVault-oneoff() {
   message "writing secrets to vault"
   # kvault "monitoring/kube-prometheus-stack/kube-prometheus-stack-helm-values.txt"
-  kvault "monitoring/grafana/grafana-helm-values.txt"
+  kvault "logs/loki/loki-helm-values.txt"
+  
+
 
 }
 
@@ -206,7 +209,7 @@ export VAULT_ADDR='http://127.0.0.1:8200'
 initVault
 portForwardVault
 loginVault
-if [ $FIRST_RUN == 0 ]; then 
+if [ $FIRST_RUN == 0 ]; then
   setupVaultSecretsOperator
 fi
 # loadSecretsToVault
