@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      version: 19.2.2
+      version: 23.3.2
       sourceRef:
         kind: HelmRepository
         name: prometheus-community-charts
@@ -41,7 +41,10 @@ spec:
       # configmapReloadImage:
       #   repository: jimmidyson/configmap-reload
       #   tag: v0.4.0
-      configReloaderCpu: 200m
+      prometheusConfigReloader:
+        resources:
+          limits:
+            cpu: 200m
       admissionWebhooks:
         enabled: false
     alertmanager:
@@ -59,6 +62,7 @@ spec:
         podMetadata:
           annotations:
             backup.velero.io/backup-volumes: alertmanager-kube-prometheus-stack-alertmanager-db
+        podAntiAffinity: "hard"
       ingress:
         enabled: true
         pathType: Prefix
@@ -187,16 +191,17 @@ spec:
           objectStorageConfig:
             name: thanos-objstore-secret
             key: objstore.yml
-        affinity:
-          podAntiAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                - key: app
-                  operator: In
-                  values:
-                  - prometheus
-              topologyKey: "kubernetes.io/hostname"
+        # affinity:
+        #   podAntiAffinity:
+        #     requiredDuringSchedulingIgnoredDuringExecution:
+        #     - labelSelector:
+        #         matchExpressions:
+        #         - key: app.kubernetes.io/name
+        #           operator: In
+        #           values:
+        #           - prometheus
+        #       topologyKey: "kubernetes.io/hostname"
+        podAntiAffinity: "hard"
       thanosService:
         enabled: true
   valuesFrom:

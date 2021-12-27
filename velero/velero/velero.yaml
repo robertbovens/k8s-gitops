@@ -11,7 +11,7 @@ spec:
     spec:
       # renovate: registryUrl=https://vmware-tanzu.github.io/helm-charts
       chart: velero
-      version: 2.26.1
+      version: 2.27.1
       sourceRef:
         kind: HelmRepository
         name: vmware-tanzu-charts
@@ -24,7 +24,7 @@ spec:
   values:
     image:
       repository: velero/velero
-      tag: v1.7.0
+      tag: v1.7.1
     configuration:
       provider: aws
       backupStorageLocation:
@@ -78,6 +78,7 @@ spec:
           cpu: 15m
         limits:
           memory: 3000Mi
+          cpu: null
     schedules:
       daily-backup:
         schedule: "0 6 * * *"

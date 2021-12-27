@@ -10,7 +10,7 @@ spec:
     spec:
       # renovate: registryUrl=https://itzg.github.io/minecraft-server-charts/
       chart: minecraft
-      version: 3.4.2
+      version: 3.6.2
       sourceRef:
         kind: HelmRepository
         name: minecraft-server-charts
@@ -18,7 +18,7 @@ spec:
       interval: 5m
   values:
     image: itzg/minecraft-server
-    imageTag: 2021.15.0-java16
+    imageTag: java17
     persistence:
       storageClass: "rook-ceph-block"
       dataDir:
@@ -39,7 +39,6 @@ spec:
       eula: "TRUE"
       version: "LATEST"
       type: PAPER
-      paperDownloadUrl: https://papermc.io/api/v1/paper/1.17.1/latest/download
       forceReDownload: true
       onlineMode: false
       difficulty: peaceful
