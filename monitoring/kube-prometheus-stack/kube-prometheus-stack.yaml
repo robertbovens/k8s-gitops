@@ -5,34 +5,184 @@ metadata:
   name: kube-prometheus-stack
   namespace: monitoring
 spec:
-  interval: 5m
+  interval: 15m
   chart:
     spec:
       # renovate: registryUrl=https://prometheus-community.github.io/helm-charts
       chart: kube-prometheus-stack
-      version: 23.3.2
+      version: 54.2.2
       sourceRef:
         kind: HelmRepository
         name: prometheus-community-charts
         namespace: flux-system
-      interval: 5m
-  timeout: 20m
+  maxHistory: 3
   install:
-    crds: Create
+    createNamespace: true
+    remediation:
+      retries: 3
   upgrade:
-    crds: CreateReplace
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
   values:
-    # defaultRules:
-    #   rules:
-    #     kubeApiserverAvailability: true
-    #     kubeApiserver: true
-    server:
-      resources:
-        requests:
-          memory: 1500Mi
-          cpu: 25m
-        limits:
-          memory: 2000Mi
+
+    crds:
+      enabled: true
+
+    cleanPrometheusOperatorObjectNames: true
+
+    defaultRules:
+      disabled:
+        HostHighCpuLoad: true
+
+    alertmanager:
+      config:
+        global:
+          resolve_timeout: 5m
+        receivers:
+        - name: 'null'
+        - name: 'slack-notifications'
+          slack_configs:
+            - channel: '#notifications'
+              icon_url: https://avatars3.githubusercontent.com/u/3380462
+              username: 'Alertmanager'
+              send_resolved: true
+              title: |-
+                [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if ne .CommonAnnotations.summary ""}}{{ .CommonAnnotations.summary }} {{ else if ne .CommonAnnotations.message ""}}{{ .CommonAnnotations.message }} {{ else if ne .CommonAnnotations.description ""}}{{ .CommonAnnotations.description }} {{ else }}{{ .CommonLabels.alertname }}{{ end }}
+              text: >-
+                {{ range .Alerts -}}
+                  *Alert:* {{ .Annotations.title }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}
+
+                {{ if ne .Annotations.summary ""}}*Summary:* {{ .Annotations.summary }} {{ else if ne .Annotations.message ""}}*Message:* {{ .Annotations.message }} {{ else if ne .Annotations.description ""}}*Description:* {{ .Annotations.description }}{{ end }}
+
+                *Details:*
+                  {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+                  {{ end }}
+                {{ end }}
+        route:
+          group_by: ["alertname", "job"]
+          group_wait: 45s
+          group_interval: 10m
+          repeat_interval: 12h
+          receiver: 'slack-notifications'
+          routes:
+            - receiver: "null" # quote
+              matchers:
+                - alertname =~ "Watchdog"
+            - receiver: "null" # quote
+              matchers:
+                - alertname =~ "InfoInhibitor"
+            # - receiver: 'pagerduty'
+            #   matchers:
+            #     - severity = "critical"
+            #   continue: true
+            - receiver: 'slack-notifications'
+        inhibit_rules:
+          - source_matchers:
+              - severity = "critical"
+            target_matchers:
+              - severity = "warning"
+            equal: ["alertname", "namespace"]
+
+        templates: ["*.tmpl"]
+      templateFiles:
+        pagerduty-custom.tmpl: |-
+          {{- define "pagerduty.custom.description" -}}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if ne .CommonAnnotations.summary ""}}{{ .CommonAnnotations.summary }} {{ else if ne .CommonAnnotations.message ""}}{{ .CommonAnnotations.message }} {{ else if ne .CommonAnnotations.description ""}}{{ .CommonAnnotations.description }} {{ else }}{{ .CommonLabels.alertname }}{{ end }}{{- end -}}
+      ingress:
+        enabled: true
+        pathType: Prefix
+        annotations:
+          kubernetes.io/ingress.class: "nginx"
+          nginx.ingress.kubernetes.io/auth-url: "https://auth.eviljungle.com/oauth2/auth"
+          nginx.ingress.kubernetes.io/auth-signin: https://auth.eviljungle.com/oauth2/start
+        hosts:
+        - prom-alert.eviljungle.com
+        tls:
+        - hosts:
+          - prom-alert.eviljungle.com
+      alertmanagerSpec:
+        replicas: 3
+        podAntiAffinity: hard
+        storage:
+          volumeClaimTemplate:
+            spec:
+              storageClassName: rook-ceph-block
+              resources:
+                requests:
+                  storage: 1Gi
+        tolerations:
+        - key: "arm"
+          operator: "Exists"
+
+    grafana:
+      enabled: false
+      forceDeployDashboards: true
+
+    kubelet:
+      enabled: true
+      serviceMonitor:
+        metricRelabelings:
+          - action: replace
+            sourceLabels: ["node"]
+            targetLabel: instance
+
+    kube-state-metrics:
+      metricLabelsAllowlist: ["persistentvolumeclaims=[*]"]
+      prometheus:
+        monitor:
+          enabled: true
+          relabelings:
+            - action: replace
+              regex: (.*)
+              replacement: $1
+              sourceLabels: ["__meta_kubernetes_pod_node_name"]
+              targetLabel: kubernetes_node
+
+    kubeApiServer:
+      enabled: true
+
+    kubeControllerManager:
+      enabled: false
+      endpoints:
+        - 10.2.0.30
+      service:
+        enabled: true
+        port: 10257
+        targetPort: 10257
+      serviceMonitor:
+        enabled: true
+        https: true
+        insecureSkipVerify: true
+
+    kubeScheduler:
+      enabled: false
+      endpoints:
+        - 10.2.0.30
+      service:
+        enabled: true
+        port: 10259
+        targetPort: 10259
+      serviceMonitor:
+        enabled: true
+        https: true
+        insecureSkipVerify: true
+
+    kubeProxy:
+      enabled: false
+      endpoints:
+        - 10.2.0.30
+
+    kubeEtcd:
+      enabled: false
+      endpoints:
+        - 10.2.0.30
+      service:
+        enabled: true
+        port: 2381
+        targetPort: 2381
+
     prometheusOperator:
       createCustomResource: true
       # prometheusConfigReloaderImage:
@@ -47,100 +197,7 @@ spec:
             cpu: 200m
       admissionWebhooks:
         enabled: false
-    alertmanager:
-      alertmanagerSpec:
-        storage:
-          volumeClaimTemplate:
-            spec:
-              storageClassName: rook-ceph-block
-              resources:
-                requests:
-                  storage: 10Gi
-        tolerations:
-        - key: "arm"
-          operator: "Exists"
-        podMetadata:
-          annotations:
-            backup.velero.io/backup-volumes: alertmanager-kube-prometheus-stack-alertmanager-db
-        podAntiAffinity: "hard"
-      ingress:
-        enabled: true
-        pathType: Prefix
-        annotations:
-          kubernetes.io/ingress.class: "nginx"
-          nginx.ingress.kubernetes.io/auth-url: "https://auth.eviljungle.com/oauth2/auth"
-          nginx.ingress.kubernetes.io/auth-signin: https://auth.eviljungle.com/oauth2/start
-        hosts:
-        - prom-alert.eviljungle.com
-        tls:
-        - hosts:
-          - prom-alert.eviljungle.com
-      config:
-        global:
-          resolve_timeout: 5m
-        route:
-          # group_by: ['alertname', 'job']
-          # group_wait: 30s
-          # group_interval: 5m
-          # repeat_interval: 6h
-          receiver: 'slack-notifications'
-          # receiver: 'pagerduty'
-          routes:
-            - match:
-                alertname: Watchdog
-              receiver: 'null'
-            - receiver: 'pagerduty'
-              match:
-                severity: critical
-              continue: true
-            - receiver: 'slack-notifications'
-        inhibit_rules:
-        - source_match:
-            severity: 'critical'
-          target_match:
-            severity: 'warning'
-          # Apply inhibition if the alertname is the same.
-          equal: ['alertname', 'namespace']
-        templates: ["*.tmpl"]
-      templateFiles:
-        pagerduty-custom.tmpl: |-
-          {{- define "pagerduty.custom.description" -}}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if ne .CommonAnnotations.summary ""}}{{ .CommonAnnotations.summary }} {{ else if ne .CommonAnnotations.message ""}}{{ .CommonAnnotations.message }} {{ else if ne .CommonAnnotations.description ""}}{{ .CommonAnnotations.description }} {{ else }}{{ .CommonLabels.alertname }}{{ end }}{{- end -}}
-    nodeExporter:
-      serviceMonitor:
-        relabelings:
-        - sourceLabels: [__meta_kubernetes_pod_node_name]
-          targetLabel: instance
-          action: replace
-    # kubelet:
-    #   serviceMonitor:
-    #     metricRelabelings:
-    #     - action: replace
-    #       sourceLabels:
-    #       - node
-    #       targetLabel: instance
-    grafana:
-      enabled: false
-      forceDeployDashboards: true
-    kubeEtcd:
-      enabled: false
-    kubeControllerManager:
-      enabled: false
-      # endpoints:
-      # - 10.2.0.30
-    kubeScheduler:
-      enabled: false
-      # endpoints:
-      # - 10.2.0.30
-    kubeProxy:
-      enabled: false
-    prometheus-node-exporter:
-      tolerations:
-      - key: "arm"
-        operator: "Exists"
-      - key: "armhf"
-        operator: "Exists"
-      - key: "node-role.kubernetes.io/master"
-        operator: "Exists"
+
     prometheus:
       ingress:
         enabled: true
@@ -154,22 +211,26 @@ spec:
         tls:
         - hosts:
           - prom-server.eviljungle.com
+      thanosService:
+        enabled: true
+      thanosServiceMonitor:
+        enabled: true
       prometheusSpec:
-        # image:
-        #   repository: quay.io/prometheus/prometheus
-        #   tag: v2.20.0
-        replicas: 2
+        replicas: 3
         replicaExternalLabelName: "replica"
-        ruleSelector: {}
-        ruleNamespaceSelector: {}
+        thanos:
+          image: quay.io/thanos/thanos:v0.32.5
+          version: v0.30.1
+          objectStorageConfig:
+            name: thanos-objstore-secret
+            key: objstore.yml
+        podAntiAffinity: hard
         ruleSelectorNilUsesHelmValues: false
-        serviceMonitorSelector: {}
-        serviceMonitorNamespaceSelector: {}
         serviceMonitorSelectorNilUsesHelmValues: false
-        podMonitorSelector: {}
-        podMonitorNamespaceSelector: {}
         podMonitorSelectorNilUsesHelmValues: false
-        retention: 6h
+        probeSelectorNilUsesHelmValues: false
+        retention: 2d
+        retentionSize: 6GB
         enableAdminAPI: true
         walCompression: true
         storageSpec:
@@ -178,32 +239,63 @@ spec:
               storageClassName: rook-ceph-block
               resources:
                 requests:
-                  storage: 10Gi
+                  storage: 20Gi
+        resources:
+          requests:
+            memory: 2000Mi
+            cpu: 250m
+          limits:
+            memory: 5000Mi
+
+        additionalScrapeConfigs:
+        - job_name: 'wmi-exporter-scrape'
+          metrics_path: '/metrics'
+          params:
+            format: [prometheus]
+          honor_labels: true
+          static_configs:
+          - targets:
+            - nvr.home:9182
+        - job_name: 'node'
+          static_configs:
+          - targets:
+            - proxmox-b.home:9100
+            - proxmox-c.home:9100
+            - opnsense.home:9100
+        - job_name: 'upsc-exporter'
+          metrics_path: '/metrics'
+          static_configs:
+          - targets:
+            - proxmox-b.home:8081
+            - proxmox-c.home:8081
+            # - k3s-pi4-c.home:8081
+            # - pi3-b.home:8081
         # tolerations:
         # - key: "arm"
         #   operator: "Exists"
-        podMetadata:
-          annotations:
-            backup.velero.io/backup-volumes: prometheus-kube-prometheus-stack-prometheus-db
-        thanos:
-          image: quay.io/thanos/thanos:v0.23.1
-          version: v0.21.1
-          objectStorageConfig:
-            name: thanos-objstore-secret
-            key: objstore.yml
-        # affinity:
-        #   podAntiAffinity:
-        #     requiredDuringSchedulingIgnoredDuringExecution:
-        #     - labelSelector:
-        #         matchExpressions:
-        #         - key: app.kubernetes.io/name
-        #           operator: In
-        #           values:
-        #           - prometheus
-        #       topologyKey: "kubernetes.io/hostname"
-        podAntiAffinity: "hard"
-      thanosService:
-        enabled: true
+
+    nodeExporter:
+      enabled: true
+
+    prometheus-node-exporter:
+      prometheus:
+        monitor:
+          enabled: true
+          # relabelings:
+          #   - action: replace
+          #     regex: (.*)
+          #     replacement: $1
+          #     sourceLabels:
+          #       - __meta_kubernetes_pod_node_name
+          #     targetLabel: instance
+      tolerations:
+      - key: "arm"
+        operator: "Exists"
+      - key: "armhf"
+        operator: "Exists"
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+
   valuesFrom:
   - kind: Secret
     name: "kube-prometheus-stack-helm-values"

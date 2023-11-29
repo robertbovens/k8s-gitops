@@ -1,11 +1,3 @@
-# blocky
-
-![](https://i.imgur.com/EeoHuZa.png)
-
-Installs [blocky](https://github.com/0xERR0R/blocky): DNS proxy as ad-blocker for local network
-
-* [blocky.yaml](blocky/blocky.yaml)
-
 # emqx
 
 ![](https://i.imgur.com/uNxxBGX.png)
@@ -13,13 +5,15 @@ Installs [blocky](https://github.com/0xERR0R/blocky): DNS proxy as ad-blocker fo
 [emqx](github.com/emqx/emqx) is a clustered MQTT broker
 
 * [emqx.yaml](emqx/emqx.yaml)
-# flood (with rtorrent sidecar)
 
-![](https://i.imgur.com/ZtMrsbm.png)
+# espresense-companion
 
-torrent client
+![](https://i.imgur.com/nULmfEo.png)
 
-* [flood.yaml](flood/flood.yaml)
+[espresense-companion](https://github.com/ESPresense/ESPresense-companion) is a soluation that solves indoor positions with mqtt data received from multiple [ESPresense](https://github.com/ESPresense/ESPresense) stations
+
+* [espresense-companion.yaml](espresense-companion/espresense-companion.yaml)
+
 
 # frigate
 
@@ -66,12 +60,6 @@ S3-compatible bucket storage service
 
 * [minio.yaml](minio/minio.yaml)
 
-# monica
-
-[Monica](https://github.com/monicahq/monica) is an opensource Source personal CRM.
-
-* [monica.yaml](monica/monica.yaml)
-
 # node-red
 
 ![](https://i.imgur.com/ABTbYw1.png)
@@ -80,14 +68,6 @@ Rules-engine for automations
 
 * [node-red.yaml](node-red/node-red.yaml)
 * Node-Red configuration is persisted to a [configuration repo](https://github.com/billimek/node-red-config)
-
-# nzbget
-
-![](https://i.imgur.com/2KQbi2w.png)
-
-[Nzbget](https://github.com/nzbget/nzbget) is an efficient usenet downloading client.
-
-* [nzbget.yaml](nzbget/nzbget.yaml)
 
 # plex
 
@@ -112,6 +92,14 @@ Rules-engine for automations
 [Readarr](https://github.com/Readarr/Readarr) is an ebook/audiobook organizer
 
 * [readarr.yaml](readarr/readarr.yaml)
+
+# sabnzbd
+
+![](https://i.imgur.com/wMZUuM1.png)
+
+[Sabnzbd](https://github.com/sabnzbd/sabnzbd) is an efficient usenet downloading client (nzbget is now abandoned).
+
+* [sabnzbd.yaml](nzbget/sabnzbd.yaml)
 
 # ser2sock
 
@@ -151,15 +139,6 @@ Rules-engine for automations
 [ubiquiti unifi controller](https://github.com/jacobalberty/unifi-docker) for wireless access points and home networking
 
 * [unifi.yaml](unifi/unifi.yaml)
-
-# valheim
-
-![](https://i.imgur.com/R1Jvrsr.jpg)
-
-[Valheim](https://github.com/lloesche/valheim-server-docker) game server
-
-* [valheim.yaml](valheim/valheim.yaml)
-
 
 # zwavejs2mqtt
 

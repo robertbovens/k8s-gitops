@@ -10,20 +10,21 @@ spec:
     spec:
       # renovate: registryUrl=https://itzg.github.io/minecraft-server-charts/
       chart: minecraft-proxy
-      version: 2.4.0
+      version: 3.3.1
       sourceRef:
         kind: HelmRepository
         name: minecraft-server-charts
         namespace: flux-system
       interval: 5m
   values:
-    image: itzg/bungeecord
-    imageTag: 2021.4.0-java11
-    securityContext:
-      # Security context settings - need to use root or else there will be problems due to the underlying image trying to do some things as root already
-      runAsUser: 0
-      runAsGroup: 0
-      fsGroup: 0
+    image:
+      repository: itzg/bungeecord
+      tag: 2023.11.0
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      fsGroup: 1000
     resources:
       requests:
         memory: 250Mi
@@ -82,9 +83,9 @@ spec:
             address: mc-minecraft:25565
             restricted: false
           survival:
-            motd: 'Private Survival SMP'
+            motd: 'Survival SMP'
             address: mcsv-minecraft:25565
-            restricted: true
+            restricted: false
           survival2:
             motd: 'Public Survival EZ-mode SMP'
             address: mcsv2-minecraft:25565

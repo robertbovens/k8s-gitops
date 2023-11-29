@@ -5,28 +5,37 @@ metadata:
   name: plex
   namespace: default
 spec:
-  interval: 5m
+  interval: 15m
   chart:
     spec:
-      # renovate: registryUrl=https://k8s-at-home.com/charts/
-      chart: plex
-      version: 6.1.0
+      chart: app-template
+      version: 1.5.1
       sourceRef:
         kind: HelmRepository
-        name: k8s-at-home-charts
+        name: bjw-s
         namespace: flux-system
-      interval: 5m
+  maxHistory: 2
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    cleanupOnFail: true
+    remediation:
+      retries: 3
+  uninstall:
+    keepHistory: false
   values:
     image:
-      repository: plexinc/pms-docker
-      tag: 1.25.2.5319-c43dc0277
+      repository: ghcr.io/onedr0p/plex
+      tag: 1.32.7.7621-871adbd44 
+
     env:
       TZ: "America/New_York"
-    podSecurityContext:
-      supplementalGroups:
-      - 44
-      - 109
-      - 100
+    envFrom:
+      - secretRef:
+          name: plex-secret
+
     service:
       main:
         type: LoadBalancer
@@ -34,32 +43,39 @@ spec:
         externalTrafficPolicy: Local
         annotations:
           metallb.universe.tf/allow-shared-ip: plex
-        port:
-          port: 32400
+        ports:
+          http:
+            port: 32400
+
     ingress:
       main:
         enabled: true
-        annotations:
-          kubernetes.io/ingress.class: "nginx"
+        ingressClassName: nginx
         hosts:
-        - host: "plex.eviljungle.com"
-          paths:
-          - path: /
-            pathType: Prefix
+          - host: "plex.eviljungle.com"
+            paths:
+              - path: /
+                pathType: Prefix
         tls:
-        - hosts:
-          - "plex.eviljungle.com"
+          - hosts:
+              - "plex.eviljungle.com"
+
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+      supplementalGroups: [44, 109, 10000]
+
     persistence:
       config:
         enabled: true
         storageClass: "rook-ceph-block"
         accessMode: ReadWriteOnce
-        size: 20Gi
+        size: 45Gi
       transcode:
-        enabled: false
-        existingClaim: nfs-media-pvc
-        subPath: Videos/transcode/
-        readOnly: false
+        enabled: true
+        type: emptyDir
       tmp:
         enabled: true
         type: emptyDir
@@ -69,35 +85,15 @@ spec:
         existingClaim: nfs-media-pvc
         mountPath: /data
         readOnly: false
-    podAnnotations:
-      backup.velero.io/backup-volumes: config
+
+    nodeSelector:
+      intel.feature.node.kubernetes.io/gpu: "true"
+
     resources:
       requests:
         gpu.intel.com/i915: 1
-        cpu: 1000m
-        memory: 1500Mi
+        cpu: 500m
+        memory: 2000Mi
       limits:
         gpu.intel.com/i915: 1
-        memory: 4900Mi
-    addons:
-      promtail:
-        enabled: true
-        image:
-          repository: grafana/promtail
-          tag: 2.4.1
-        loki: http://loki.logs.svc.cluster.local:3100/loki/api/v1/push
-        logs:
-        - name: promtail/plex
-          path: "/config/Library/Application Support/Plex Media Server/Logs/*.log"
-        - name: promtail/plex/plugins
-          path: "/config/Library/Application Support/Plex Media Server/Logs/PMS Plugin Logs/*.log"
-        volumeMounts:
-        - name: config
-          mountPath: /config
-          readOnly: true
-        securityContext:
-          runAsUser: 0
-  valuesFrom:
-  - kind: Secret
-    name: "plex-helm-values"
-    optional: false
+        memory: 5000Mi

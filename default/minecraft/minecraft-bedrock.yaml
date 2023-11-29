@@ -5,12 +5,13 @@ metadata:
   name: mcbr
   namespace: default
 spec:
+  suspend: true
   interval: 5m
   chart:
     spec:
       # renovate: registryUrl=https://itzg.github.io/minecraft-server-charts/
       chart: minecraft-bedrock
-      version: 1.2.0
+      version: 2.4.0
       sourceRef:
         kind: HelmRepository
         name: minecraft-server-charts
@@ -22,14 +23,17 @@ spec:
       dataDir:
         enabled: true
         Size: 10Gi
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      fsGroup: 1000
     resources:
       requests:
         memory: 250Mi
         cpu: 100m
       limits:
         memory: 250Mi
-    podAnnotations:
-      backup.velero.io/backup-volumes: datadir
     minecraftServer:
       eula: "TRUE"
       version: "LATEST"
@@ -41,3 +45,50 @@ spec:
       cheats: true
       serviceType: LoadBalancer
       loadBalancerIP: 10.0.6.103
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: mcbr-restic
+  namespace: default
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword-connect
+  target:
+    name: mcbr-restic-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: '{{ .REPOSITORY_TEMPLATE }}/mcbr'
+        RESTIC_PASSWORD: '{{ .RESTIC_PASSWORD }}'
+        AWS_ACCESS_KEY_ID: '{{ .MINIO_ACCESS_KEY }}'
+        AWS_SECRET_ACCESS_KEY: '{{ .MINIO_SECRET_KEY }}'
+  dataFrom:
+    - extract:
+        key: minio
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: mcbr
+  namespace: default
+spec:
+  sourcePVC: mcbr-minecraft-bedrock-datadir
+  trigger:
+    schedule: "0 6 * * *"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 10
+    repository: mcbr-restic-secret
+    cacheCapacity: 10Gi
+    volumeSnapshotClassName: csi-rbdplugin-snapclass
+    storageClassName: rook-ceph-block
+    moverSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    retain:
+      daily: 10
+      within: 3d

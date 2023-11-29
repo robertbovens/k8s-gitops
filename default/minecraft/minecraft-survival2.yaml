@@ -5,40 +5,51 @@ metadata:
   name: mcsv2
   namespace: default
 spec:
+  suspend: true
   interval: 5m
   chart:
     spec:
       # renovate: registryUrl=https://itzg.github.io/minecraft-server-charts/
       chart: minecraft
-      version: 3.6.2
+      version: 4.12.0
       sourceRef:
         kind: HelmRepository
         name: minecraft-server-charts
         namespace: flux-system
       interval: 5m
   values:
-    image: itzg/minecraft-server
-    imageTag: java17
+    image:
+      repository: itzg/minecraft-server
+      tag: 2023.11.1-java17
     strategyType: Recreate
     persistence:
       storageClass: "rook-ceph-block"
       dataDir:
         enabled: true
         Size: 10Gi
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      fsGroup: 1000
     resources:
       requests:
         memory: 6Gi
-        cpu: 250m
+        cpu: 500m
       limits:
         memory: 6Gi
     startupProbe:
       enabled: true
-    podAnnotations:
-      backup.velero.io/backup-volumes: datadir
     extraEnv:
       ENABLE_AUTOPAUSE: FALSE
-      SPIGET_RESOURCES: "74354,8631,28140,86449"
     minecraftServer:
+      spigetResources:
+        - 28140
+        - 74354
+        - 102931
+      modUrls:
+        - https://github.com/EssentialsX/Essentials/releases/download/2.20.0/EssentialsX-2.20.0.jar
+        - https://cdn.modrinth.com/data/Lu3KuzdV/versions/mvLpRWww/CoreProtect-21.3.jar
       eula: "TRUE"
       version: "LATEST"
       type: PAPER
@@ -50,6 +61,9 @@ spec:
       maxTickTime: -1
       serviceType: ClusterIP
       gameMode: survival
+      onlineMode: false
+      maxWorldSize: 5999968
+      worldSaveName: 'world-20220621-mangrove-island'
       motd: "\u00A76\u00A7lpublic survival\u00A7r\u00A7l - \u00A7r\u00A7c\u00A7lSMP HARDCORE\u00A7r\n"
       icon: https://www.freeiconspng.com/uploads/minecraft-server-icon-23.png
       rcon:
@@ -75,3 +89,50 @@ spec:
             tls:
             - hosts:
               - mcsv2.eviljungle.com
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: mcsv2-restic
+  namespace: default
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword-connect
+  target:
+    name: mcsv2-restic-secret
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      data:
+        RESTIC_REPOSITORY: '{{ .REPOSITORY_TEMPLATE }}/mcsv2'
+        RESTIC_PASSWORD: '{{ .RESTIC_PASSWORD }}'
+        AWS_ACCESS_KEY_ID: '{{ .MINIO_ACCESS_KEY }}'
+        AWS_SECRET_ACCESS_KEY: '{{ .MINIO_SECRET_KEY }}'
+  dataFrom:
+    - extract:
+        key: minio
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: mcsv2
+  namespace: default
+spec:
+  sourcePVC: mcsv2-minecraft-datadir
+  trigger:
+    schedule: "0 6 * * *"
+  restic:
+    copyMethod: Snapshot
+    pruneIntervalDays: 10
+    repository: mcsv2-restic-secret
+    cacheCapacity: 20Gi
+    volumeSnapshotClassName: csi-rbdplugin-snapclass
+    storageClassName: rook-ceph-block
+    moverSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+    retain:
+      daily: 10
+      within: 3d
