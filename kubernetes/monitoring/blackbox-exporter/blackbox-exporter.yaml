@@ -1,0 +1,56 @@
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: blackbox-exporter
+  namespace: monitoring
+spec:
+  interval: 15m
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    tag: 11.10.0
+  url: oci://ghcr.io/prometheus-community/charts/prometheus-blackbox-exporter
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: blackbox-exporter
+  namespace: monitoring
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: blackbox-exporter
+  interval: 1h
+  values:
+    fullnameOverride: blackbox-exporter
+    config:
+      modules:
+        tcp_connect:
+          prober: tcp
+          timeout: 5s
+          tcp:
+            preferred_ip_protocol: ip4
+    serviceMonitor:
+      enabled: true
+    prometheusRule:
+      enabled: true
+      rules:
+        - alert: BlackboxProbeFailed
+          expr: probe_success == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Blackbox probe failed (instance {{ $labels.instance }})"
+            description: "Probe has been failing for more than 5 minutes."
+        - alert: BlackboxProbeSlowProbe
+          expr: avg_over_time(probe_duration_seconds[1m]) > 5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Blackbox probe slow (instance {{ $labels.instance }})"
+            description: "Average probe duration over the last minute is above 5s."

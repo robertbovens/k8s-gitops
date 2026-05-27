@@ -1,0 +1,72 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ser2sock
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nutech.feature.node.kubernetes.io/alarmdecoder
+                    operator: In
+                    values:
+                      - "true"
+
+    controllers:
+      main:
+        containers:
+          main:
+            image:
+              repository: tenstartups/ser2sock
+              tag: latest@sha256:379d9338c720da30b63dc4cf2ecea07eb89dac7d62d5c79047294fffe97ae559
+              pullPolicy: Always
+            env:
+              TZ: "America/New York"
+              LISTENER_PORT: 10000
+              BAUD_RATE: 115200
+              SERIAL_DEVICE: "/dev/ttyUSB0"
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 10000
+                  initialDelaySeconds: 10
+                  periodSeconds: 30
+                  timeoutSeconds: 3
+                  failureThreshold: 3
+              readiness: *probes
+            resources:
+              requests:
+                cpu: 15m
+                memory: 50Mi
+              limits:
+                memory: 250Mi
+                generic-device-plugin/alarmdecoder: 1
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: { drop: ["ALL"] }
+
+    service:
+      main:
+        controller: main
+        ports:
+          server:
+            port: 10000
+            primary: true
+            protocol: TCP

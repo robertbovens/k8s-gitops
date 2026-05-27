@@ -1,0 +1,216 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: &app gatus
+  namespace: monitoring
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+    configMaps:
+      config:
+        data:
+          config.yaml: |
+            remote:
+              instances:
+                - endpoint-prefix: ""
+                  url: "https://cloud.drake-eel.ts.net/api/v1/endpoints/statuses"
+
+            connectivity:
+              checker:
+                target: 1.1.1.1:53
+                interval: 1m
+
+            endpoints:
+              - name: Cloudflare
+                group: connectivity
+                url: icmp://1.1.1.1
+                interval: 1m
+                conditions:
+                  - "[CONNECTED] == true"
+
+              - name: Google
+                group: connectivity
+                url: icmp://8.8.8.8
+                interval: 1m
+                conditions:
+                  - "[CONNECTED] == true"
+
+              - name: Quad9
+                group: connectivity
+                url: icmp://9.9.9.9
+                interval: 1m
+                conditions:
+                  - "[CONNECTED] == true"
+
+              # Infrastructure
+              - name: Opnsense
+                group: infrastructure
+                url: "icmp://10.0.7.1"
+                interval: 1m
+                conditions:
+                  - "[CONNECTED] == true"
+              - name: nas
+                group: infrastructure
+                url: "icmp://nas.home"
+                interval: 1m
+                conditions:
+                  - "[CONNECTED] == true"
+
+            metrics: true
+
+            storage:
+              type: sqlite
+              caching: true
+              path: ${GATUS_CONFIG_PATH}/gatus.db
+
+            ui:
+              title: Status | eviljungle.com
+              header: Status
+              logo: https://avatars.githubusercontent.com/u/6393612
+              dashboard-heading: "eviljungle.com"
+              dashboard-subheading: "Homelab service health"
+              buttons:
+                - name: External Status
+                  link: https://cloud.drake-eel.ts.net
+                - name: Homelab
+                  link: https://github.com/billimek/k8s-gitops
+                - name: UptimeRobot
+                  link: https://stats.uptimerobot.com/57WrgTZZzz
+
+            web:
+              port: ${GATUS_WEB_PORT}
+
+    controllers:
+      gatus:
+        initContainers:
+          gatus-sidecar:
+            image:
+              repository: ghcr.io/home-operations/gatus-sidecar
+              tag: 0.0.18@sha256:3e8ab2f65ac6eba268c963919e34e6f4c4e10439979de3ded71242240621edcd
+            args:
+              - --auto-httproute
+              - --enable-httproute
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 128Mi
+            restartPolicy: Always
+        containers:
+          app:
+            image:
+              repository: ghcr.io/twin/gatus
+              tag: v5.36.0@sha256:c5f210d095fa78e6efaa20ffeb14803f2ba4f10615e16a6d12087697149617f0
+            env:
+              GATUS_DELAY_START_SECONDS: 5
+              GATUS_CONFIG_PATH: /config
+              GATUS_WEB_PORT: &port 80
+              TZ: America/New_York
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /health
+                    port: *port
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 5
+                  failureThreshold: 3
+              readiness: *probes
+            resources:
+              requests:
+                cpu: 10m
+              limits:
+                memory: 256Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+        serviceAccount:
+          identifier: gatus
+
+    persistence:
+      config:
+        existingClaim: gatus-config
+        globalMounts:
+          - path: /config
+      config-file:
+        type: configMap
+        name: gatus
+        globalMounts:
+          - path: /config/static/config.yaml
+            subPath: config.yaml
+            readOnly: true
+
+    rbac:
+      roles:
+        gatus:
+          type: ClusterRole
+          rules:
+            - apiGroups: ["gateway.networking.k8s.io"]
+              resources: ["gateways", "httproutes"]
+              verbs: ["get", "watch", "list"]
+      bindings:
+        gatus:
+          type: ClusterRoleBinding
+          roleRef:
+            identifier: gatus
+          subjects:
+            - identifier: gatus
+
+    route:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/external: "true"
+          gatus.home-operations.com/enabled: "false"
+        parentRefs:
+          - name: public
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - &host status.eviljungle.com
+      internal:
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          gatus.home-operations.com/enabled: "false"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - *host
+
+    service:
+      app:
+        controller: gatus
+        ports:
+          http:
+            port: *port
+
+    serviceAccount:
+      gatus: {}
+
+    serviceMonitor:
+      app:
+        endpoints:
+          - port: http

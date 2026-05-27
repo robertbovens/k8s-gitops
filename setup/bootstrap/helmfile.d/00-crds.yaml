@@ -1,0 +1,80 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/helmfile
+#
+# CRD-only extraction helmfile
+# Usage: helmfile -f 00-crds.yaml template -q | kubectl apply --server-side -f -
+
+helmDefaults:
+  args:
+    - --include-crds
+    - --no-hooks
+  postRenderer: bash
+  postRendererArgs:
+    - -c
+    - yq ea -e 'select(.kind == "CustomResourceDefinition")'
+
+repositories:
+  - name: emqx
+    url: https://repos.emqx.io/charts
+
+releases:
+  - name: prometheus-operator-crds
+    namespace: monitoring
+    chart: oci://ghcr.io/prometheus-community/charts/prometheus-operator-crds
+    version: 29.0.0
+
+  - name: external-secrets
+    namespace: kube-system
+    chart: oci://ghcr.io/external-secrets/charts/external-secrets
+    version: 2.5.0
+
+  - name: volsync
+    namespace: kube-system
+    chart: oci://ghcr.io/home-operations/charts-mirror/volsync-perfectra1n
+    version: 0.18.5
+
+  - name: rook-ceph
+    namespace: rook-ceph
+    chart: oci://ghcr.io/rook/rook-ceph
+    version: v1.19.5
+
+  - name: cloudnative-pg
+    namespace: default
+    chart: oci://ghcr.io/cloudnative-pg/charts/cloudnative-pg
+    version: 0.28.2
+
+  - name: emqx-operator
+    namespace: default
+    chart: emqx/emqx-operator
+    version: 2.2.29
+
+  - name: envoy-gateway
+    namespace: kube-system
+    chart: oci://mirror.gcr.io/envoyproxy/gateway-helm
+    version: v1.8.0
+
+  - name: node-feature-discovery
+    namespace: kube-system
+    chart: oci://registry.k8s.io/nfd/charts/node-feature-discovery
+    version: 0.18.3
+
+  - name: silence-operator
+    namespace: monitoring
+    chart: oci://gsoci.azurecr.io/charts/giantswarm/silence-operator
+    version: 0.20.1
+
+  - name: snapshot-controller
+    namespace: kube-system
+    chart: oci://ghcr.io/piraeusdatastore/helm-charts/snapshot-controller
+    version: 5.0.4
+
+  - name: grafana-operator
+    namespace: monitoring
+    chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
+    version: 5.23.0
+
+  - name: tuppr
+    namespace: system-upgrade
+    chart: oci://ghcr.io/home-operations/charts/tuppr
+    version: 0.1.37
+

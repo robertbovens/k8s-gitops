@@ -1,0 +1,218 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: shelfmark
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile: { type: RuntimeDefault }
+
+    configMaps:
+      scripts:
+        data:
+          scan-audiobookshelf.sh: |
+            #!/bin/sh
+            set -e
+            
+            # Validate required environment variables
+            if [ -z "$AUDIOBOOKSHELF_TOKEN" ]; then
+              echo "ERROR: AUDIOBOOKSHELF_TOKEN environment variable is not set" >&2
+              exit 1
+            fi
+            
+            if [ -z "$AUDIOBOOKSHELF_LIBRARY_ID" ]; then
+              echo "ERROR: AUDIOBOOKSHELF_LIBRARY_ID environment variable is not set" >&2
+              exit 1
+            fi
+            
+            # Audiobookshelf API endpoint
+            AUDIOBOOKSHELF_URL="http://audiobookshelf:80"
+            SCAN_ENDPOINT="${AUDIOBOOKSHELF_URL}/api/libraries/${AUDIOBOOKSHELF_LIBRARY_ID}/scan"
+            
+            echo "Triggering Audiobookshelf library scan..."
+            echo "Library ID: ${AUDIOBOOKSHELF_LIBRARY_ID}"
+            echo "Endpoint: ${SCAN_ENDPOINT}"
+            
+            # Trigger the library scan
+            HTTP_CODE=$(curl -s -o /tmp/abs-response.json -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer ${AUDIOBOOKSHELF_TOKEN}" \
+              "${SCAN_ENDPOINT}")
+            
+            echo "Response code: ${HTTP_CODE}"
+            
+            # Check if the request was successful
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "SUCCESS: Audiobookshelf library scan triggered successfully"
+              cat /tmp/abs-response.json 2>/dev/null || true
+              rm -f /tmp/abs-response.json
+            else
+              echo "ERROR: Failed to trigger Audiobookshelf library scan (HTTP ${HTTP_CODE})" >&2
+              cat /tmp/abs-response.json 2>/dev/null || true
+              rm -f /tmp/abs-response.json
+              exit 1
+            fi
+
+            MATCH_ENDPOINT="${AUDIOBOOKSHELF_URL}/api/libraries/${AUDIOBOOKSHELF_LIBRARY_ID}/matchall"
+            echo "Triggering Audiobookshelf matchall..."
+            MATCH_CODE=$(curl -s -o /tmp/abs-match.json -w "%{http_code}" \
+              -X GET \
+              -H "Authorization: Bearer ${AUDIOBOOKSHELF_TOKEN}" \
+              "${MATCH_ENDPOINT}")
+            echo "Matchall response code: ${MATCH_CODE}"
+            if [ "$MATCH_CODE" = "200" ]; then
+              echo "SUCCESS: matchall triggered"
+            else
+              echo "WARN: matchall returned HTTP ${MATCH_CODE}" >&2
+              cat /tmp/abs-match.json 2>/dev/null || true
+            fi
+            rm -f /tmp/abs-match.json
+            exit 0
+
+    controllers:
+      shelfmark:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/calibrain/shelfmark-lite
+              tag: v1.3.0@sha256:655168ef4dd1af939d368f9a8448bf2606888f8221b014f219a3a8eab1c4b307
+            args:
+              - --access-logfile=-
+              - --error-logfile=-
+              - --worker-class=geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+              - --workers=1
+              - -t
+              - "300"
+              - -b
+              - 0.0.0.0:8084
+              - shelfmark.main:app
+            command:
+              - gunicorn
+            env:
+              TZ: America/New_York
+              FLASK_PORT: &port 8084
+              AUDIOBOOK_LIBRARY_URL: https://abs.eviljungle.com
+              SEARCH_MODE: universal
+              
+              # Download destinations (per-user subfolders)
+              INGEST_DIR: /media/books/import/{User}
+              DESTINATION_AUDIOBOOK: /media/books/audiobooks
+              
+              # Metadata provider configuration
+              METADATA_PROVIDER: hardcover
+              METADATA_PROVIDER_AUDIOBOOK: hardcover
+              HARDCOVER_ENABLED: "true"
+              DEFAULT_RELEASE_SOURCE: prowlarr
+              
+              # Prowlarr integration
+              PROWLARR_ENABLED: "true"
+              PROWLARR_URL: http://prowlarr:9696
+              PROWLARR_TORRENT_CLIENT: qbittorrent
+              QBITTORRENT_URL: http://qbittorrent:80
+              
+              # File organization
+              FILE_ORGANIZATION_AUDIOBOOK: organize
+              TEMPLATE_AUDIOBOOK_ORGANIZE: "{Author}/{Title}/{Author} - {Title} ({PartNumber})"
+              # HARDLINK_TORRENTS: "true"
+              HARDLINK_TORRENTS_AUDIOBOOKS: "true"
+              
+              # Authentication
+              AUTH_METHOD: builtin
+              SESSION_COOKIE_SECURE: "true"
+              MAX_CONCURRENT_DOWNLOADS: "3"
+
+              # Audiobookshelf integration
+              CUSTOM_SCRIPT: /config/scripts/scan-audiobookshelf.sh
+              AUDIOBOOKSHELF_LIBRARY_ID: 1461f532-1ee2-43f8-9f60-702176e1c3ac
+
+            envFrom:
+              - secretRef:
+                  name: shelfmark-secret
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/health
+                    port: *port
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness: *probes
+              startup:
+                enabled: true
+                spec:
+                  failureThreshold: 30
+                  periodSeconds: 10
+            resources:
+              requests:
+                cpu: 10m
+              limits:
+                memory: 1Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: { drop: ["ALL"] }
+              readOnlyRootFilesystem: true
+
+    persistence:
+      config:
+        existingClaim: shelfmark-config
+        globalMounts:
+          - path: /config
+      scripts:
+        type: configMap
+        identifier: scripts
+        defaultMode: 0755
+        globalMounts:
+          - path: /config/scripts
+            readOnly: true
+      media:
+        type: nfs
+        server: nas.home
+        path: /mnt/tank/media
+        globalMounts:
+          - path: /media
+      tmp:
+        type: emptyDir
+        globalMounts:
+          - path: /tmp
+            subPath: tmp
+          - path: /var/log
+            subPath: var-log
+          - path: /.gunicorn
+            subPath: gunicorn
+
+    route:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/external: "true"
+        parentRefs:
+          - name: public
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - shelfmark.eviljungle.com
+          - books.eviljungle.com
+
+    service:
+      app:
+        controller: shelfmark
+        ports:
+          http:
+            port: *port

@@ -1,0 +1,121 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: qbittorrent
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      securityContext:
+        fsGroup: 1001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1001
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+
+    controllers:
+      qbittorrent:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/home-operations/qbittorrent
+              tag: 5.2.0@sha256:788796013c3da75f2dba568c5319975a5c41f555586dfd13987be4631181e00e
+            env:
+              TZ: America/New_York
+              QBT_WEBUI_PORT: &port 80
+              QBT_TORRENTING_PORT: &torrentPort 50413
+            envFrom:
+              - secretRef:
+                  name: qbittorrent-secret
+            probes:
+              liveness:
+                enabled: true
+              readiness:
+                enabled: true
+              startup:
+                enabled: true
+                spec:
+                  failureThreshold: 30
+                  periodSeconds: 5
+            resources:
+              requests:
+                cpu: 10m
+                memory: 250Mi
+                ephemeral-storage: 5Gi
+              limits:
+                memory: 2Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities: {drop: ["ALL"]}
+              readOnlyRootFilesystem: true
+
+    # Note: If downloading very large torrents it might be worth using NFS for your download directory.
+    # Beware if you are downloading torrents directly to a ZFS dataset that dataset will accrue fragmentation.
+    persistence:
+      config:
+        existingClaim: qbittorrent-config
+      scripts:
+        type: configMap
+        name: qbittorrent-scripts
+        defaultMode: 0755
+        globalMounts:
+          - path: /config/scripts
+            readOnly: true
+      media:
+        type: nfs
+        server: nas.home
+        path: /mnt/tank/media
+        globalMounts:
+          - path: /media
+      tmp:
+        type: emptyDir
+        sizeLimit: 1Gi
+      incomplete:
+        enabled: true
+        type: emptyDir
+        sizeLimit: 80Gi
+
+    route:
+      main:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - q.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: qbittorrent
+                port: 80
+
+    service:
+      app:
+        controller: qbittorrent
+        ports:
+          http:
+            port: *port
+            primary: true
+          bittorrent:
+            enabled: true
+            port: *torrentPort
+            protocol: TCP
+        type: LoadBalancer
+        externalTrafficPolicy: Local
+        loadBalancerIP: 10.0.6.52

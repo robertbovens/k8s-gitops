@@ -1,0 +1,434 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: victoriametrics-charts
+  namespace: monitoring
+spec:
+  interval: 2h
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    tag: 0.80.0
+  url: oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: vm
+  namespace: monitoring
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: victoriametrics-charts
+  interval: 1h
+  install:
+    createNamespace: true
+  values:
+    fullnameOverride: stack
+    victoria-metrics-operator:
+      enabled: true
+      env:
+        - name: VM_VMALERTDEFAULT_CONFIGRELOADERCPU
+          value: 0
+        - name: VM_VMAGENTDEFAULT_CONFIGRELOADERCPU
+          value: 0
+        - name: VM_VMALERTMANAGER_CONFIGRELOADERCPU
+          value: 0
+      operator:
+        disable_prometheus_converter: false # Ensure we keep enabled the converter to sync prom rules to VM rules
+        enable_converter_ownership: true # Required to allow VM to remove VM rules it imports if a prometheus rule is deleted
+
+    defaultDashboards:
+      enabled: true
+      grafanaOperator:
+        enabled: true
+
+    defaultRules:
+      create: true
+      rules:
+        # Disabled because NFS zero-scalers intentionally run at maxReplicas=1
+        KubeHpaMaxedOut:
+          create: false
+      groups:
+        k8sContainerMemorySwap:
+          create: false
+        # Disabled because kube-scheduler metrics produce no useful data
+        # (scheduler is mostly idle, histogram_quantile returns empty results)
+        kubeScheduler:
+          create: false
+
+    vmsingle:
+      enabled: true
+      spec:
+        # -- Data retention period. Possible units character: h(ours), d(ays), w(eeks), y(ears), if no unit character specified - month. The minimum retention period is 24h. See these [docs](https://docs.victoriametrics.com/single-server-victoriametrics/#retention)
+        retentionPeriod: "3"
+        replicaCount: 1
+        storage:
+          accessModes:
+            - ReadWriteOnce
+          storageClassName: ceph-block
+          resources:
+            requests:
+              storage: 60Gi
+        extraArgs:
+          memory.allowedPercent: "75"
+        resources:
+          limits:
+            memory: 3Gi
+          requests:
+            cpu: 530m
+            memory: 1.5Gi
+
+      route:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - vmsingle.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: vmsingle-stack
+                port: 8428
+
+    alertmanager:
+      enabled: true
+      spec:
+        externalURL: "https://vmalertmanager.eviljungle.com"
+        routePrefix: /
+        storage:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              storageClassName: ceph-block
+              resources:
+                requests:
+                  storage: 1Gi
+      route:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - vmalertmanager.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: vmalertmanager-stack
+                port: 9093
+
+      config:
+        route:
+          receiver: 'blackhole'
+          group_by: ['alertname', 'severity']
+          group_wait: 30s
+          group_interval: 10m
+          repeat_interval: 12h
+          routes:
+            # Route 1: Blackhole for noise
+            - matchers:
+                - alertname=~"WatchDog|InfoInhibitor|KubeMemoryOvercommit|CephNodeNetworkPacketErrors"
+              receiver: 'blackhole'
+            
+            # Route 2: Critical infrastructure alerts - group by instance
+            - matchers:
+                - severity = "critical"
+                - alertname=~"Host.*|Node.*|Zfs.*|UPS.*|Smartctl.*"
+              receiver: 'critical-discord'
+              group_by: ['alertname', 'instance']
+              group_wait: 10s
+              continue: false
+            
+            # Route 3: Warning infrastructure alerts - group by instance
+            - matchers:
+                - severity = "warning"
+                - alertname=~"Host.*|Node.*|Zfs.*|UPS.*|Smartctl.*"
+              receiver: 'warning-discord'
+              group_by: ['alertname', 'instance']
+              continue: false
+            
+            # Route 4: Critical Kubernetes/application alerts - group by namespace
+            - matchers:
+                - severity = "critical"
+                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|VolSync.*|Envoy.*|PG.*"
+              receiver: 'critical-discord'
+              group_by: ['alertname', 'namespace']
+              group_wait: 10s
+              continue: false
+            
+            # Route 5: Warning Kubernetes/application alerts - group by namespace
+            - matchers:
+                - severity = "warning"
+                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|VolSync.*|Envoy.*|PG.*"
+              receiver: 'warning-discord'
+              group_by: ['alertname', 'namespace']
+              continue: false
+            
+            # Route 6: Catch-all for other critical alerts
+            - matchers:
+                - severity = "critical"
+              receiver: 'critical-discord'
+              group_by: ['alertname']
+              group_wait: 10s
+              continue: false
+            
+            # Route 7: Catch-all for other warning alerts
+            - matchers:
+                - severity = "warning"
+              receiver: 'warning-discord'
+              group_by: ['alertname']
+              continue: false
+        
+        inhibit_rules:
+          - source_matchers:
+              - severity = "critical"
+            target_matchers:
+              - severity =~ "warning|info"
+            equal: ['namespace', 'alertname']
+          - source_matchers:
+              - severity = "warning"
+            target_matchers:
+              - severity = "info"
+            equal: ['namespace', 'alertname']
+          - source_matchers:
+              - alertname = "InfoInhibitor"
+            target_matchers:
+              - severity = "info"
+            equal: ['namespace']
+          - target_matchers:
+              - alertname = "InfoInhibitor"
+          # When the local gateway is down (router reboot / network outage),
+          # suppress external target alerts - they are expected side-effects, not
+          # independent incidents.
+          - source_matchers:
+              - alertname = "SmokepingGatewayDown"
+            target_matchers:
+              - alertname =~ "SmokepingTargetDown|SmokepingPacketLoss"
+        
+        receivers:
+          - name: 'blackhole'
+          
+          - name: 'critical-discord'
+            discord_configs:
+              - webhook_url: "PLACEHOLDER"  # Injected via valuesFrom
+                send_resolved: true
+                title: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ if ne .CommonAnnotations.summary ""}}{{ .CommonAnnotations.summary }}{{ else if ne .CommonAnnotations.message ""}}{{ .CommonAnnotations.message }}{{ else if ne .CommonAnnotations.description ""}}{{ .CommonAnnotations.description }}{{ else }}{{ .CommonLabels.alertname }}{{ end }}'
+                message: |-
+                  {{ range .Alerts -}}
+                  **Alert:** {{ .Annotations.title }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}
+
+                  {{ if ne .Annotations.summary ""}}**Summary:** {{ .Annotations.summary }}{{ else if ne .Annotations.message ""}}**Message:** {{ .Annotations.message }}{{ else if ne .Annotations.description ""}}**Description:** {{ .Annotations.description }}{{ end }}
+
+                  🏷 **Labels:**
+                  {{ range .Labels.SortedPairs }} • {{ .Name }}: {{ .Value }}
+                  {{ end }}
+                  {{ end }}
+          
+          - name: 'warning-discord'
+            discord_configs:
+              - webhook_url: "PLACEHOLDER"  # Injected via valuesFrom
+                send_resolved: true
+                title: '[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ if eq .Status "firing" }}⚠️{{ else }}✅{{ end }} {{ if ne .CommonAnnotations.summary ""}}{{ .CommonAnnotations.summary }}{{ else if ne .CommonAnnotations.message ""}}{{ .CommonAnnotations.message }}{{ else if ne .CommonAnnotations.description ""}}{{ .CommonAnnotations.description }}{{ else }}{{ .CommonLabels.alertname }}{{ end }}'
+                message: |-
+                  {{ range .Alerts -}}
+                  **Alert:** {{ .Annotations.title }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}
+
+                  {{ if ne .Annotations.summary ""}}**Summary:** {{ .Annotations.summary }}{{ else if ne .Annotations.message ""}}**Message:** {{ .Annotations.message }}{{ else if ne .Annotations.description ""}}**Description:** {{ .Annotations.description }}{{ end }}
+
+                  🏷 **Labels:**
+                  {{ range .Labels.SortedPairs }} • {{ .Name }}: {{ .Value }}
+                  {{ end }}
+                  {{ end }}
+    vmalert:
+      enabled: true
+      spec:
+        extraArgs:
+          external.url: "https://vmalert.eviljungle.com"
+        evaluationInterval: 15s
+      route:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - vmalert.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: vmalert-stack
+                port: 8080
+
+    vmagent:
+      enabled: true
+      spec:
+        extraArgs:
+          promscrape.dropOriginalLabels: "true"
+          promscrape.streamParse: "true"
+          promscrape.maxScrapeSize: 50MiB
+        additionalScrapeConfigs:
+          name: victoria-metrics-k8s-stack-helm-values
+          key: additionalScrapeConfigs.yaml
+        scrapeInterval: 20s
+        resources:
+          limits:
+            cpu: null
+            memory: 500Mi
+          requests:
+            cpu: 500m
+            memory: 100Mi
+
+      route:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - vmagent.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: vmagent-stack
+                port: 8429
+    grafana:
+      enabled: false
+    prometheus-node-exporter:
+      enabled: true
+    kube-state-metrics:
+      enabled: true
+    kubelet:
+      enabled: true
+      vmScrape:
+        spec:
+          # drop high cardinality label and useless metrics for cadvisor and kubelet
+          metricRelabelConfigs:
+            # Drop less useful container CPU metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              regex: 'container_cpu_(cfs_throttled_seconds_total|load_average_10s|system_seconds_total|user_seconds_total)'
+            # Drop less useful / always zero container memory metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              regex: 'container_memory_(failures_total|mapped_file|swap)'
+            # Drop less useful container process metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              # regex: 'container_(file_descriptors|tasks_state|threads_max)'
+              regex: 'container_(tasks_state|threads_max)'
+            # Drop less useful container filesystem metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              regex: 'container_fs_(io_current|io_time_seconds_total|io_time_weighted_seconds_total|reads_merged_total|sector_reads_total|sector_writes_total|writes_merged_total)'
+            # Drop less useful container blkio metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              regex: 'container_blkio_device_usage_total'
+            # Drop container spec metrics that overlap with kube-state-metrics.
+            - sourceLabels: [__name__]
+              action: drop
+              regex: 'container_spec.*'
+            # Drop cgroup metrics with no pod.
+            - sourceLabels: [id, pod]
+              action: drop
+              regex: '.+;'
+            - action: drop
+              sourceLabels: [__name__]
+              regex: prober_probe_duration_seconds_bucket
+            # Drop high-cardinality labels.
+            - action: labeldrop
+              regex: (uid|id|name|pod_uid|interface)
+            - action: drop
+              sourceLabels: [__name__]
+              regex: (rest_client_request_duration_seconds_bucket|rest_client_request_duration_seconds_sum|rest_client_request_duration_seconds_count)
+
+    kubeApiServer:
+      enabled: true
+
+    kubeControllerManager:
+      enabled: true
+      vmScrape:
+        spec:
+          endpoints:
+            - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              port: http-metrics
+              scheme: https
+              tlsConfig:
+                caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                insecureSkipVerify: true
+                serverName: localhost
+
+    coreDns:
+      enabled: true
+
+    kubeEtcd:
+      enabled: true
+      endpoints:
+        - 10.0.7.49
+      vmScrape:
+        spec:
+          endpoints:
+            - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              port: http-metrics
+              scheme: http
+      service:
+        enabled: true
+        port: 2381
+        targetPort: 2381
+
+    kubeScheduler:
+      enabled: true
+      vmScrape:
+        spec:
+          endpoints:
+            - bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              port: http-metrics
+              scheme: https
+              tlsConfig:
+                caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                insecureSkipVerify: true
+                serverName: localhost
+
+    kubeProxy:
+      enabled: false
+
+  valuesFrom:
+    - kind: Secret
+      name: alertmanager-webhooks
+      valuesKey: critical-webhook-url
+      targetPath: alertmanager.config.receivers[1].discord_configs[0].webhook_url
+    - kind: Secret
+      name: alertmanager-webhooks
+      valuesKey: warning-webhook-url
+      targetPath: alertmanager.config.receivers[2].discord_configs[0].webhook_url

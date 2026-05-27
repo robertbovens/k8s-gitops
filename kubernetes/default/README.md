@@ -1,0 +1,163 @@
+# audiobookshelf
+
+like plex, but for audiobooks
+
+# cloudnative-pg
+
+postgresql operator for kubernetes
+
+# continuwuity
+
+[continuwuity](https://forgejo.ellis.link/continuwuation/continuwuity) is a Matrix homeserver (conduwuit fork) running at `matrix.eviljungle.com`
+
+# echo-server
+
+echo server for testing
+
+# emqx
+
+![](https://i.imgur.com/uNxxBGX.png)
+
+[emqx](github.com/emqx/emqx) is a clustered MQTT broker
+
+* [emqx/](emqx/)
+
+# frigate
+
+![](https://i.imgur.com/hv7bh6m.png)
+
+Installs [frigate](https://github.com/blakeblackshear/frigate/): Realtime object detection on RTSP cameras with the Google Coral
+
+* [frigate.yaml](frigate/frigate.yaml)
+
+# home-assistant
+
+[Home-Assistant](https://github.com/home-assistant/core) is an opensource home automation solution.
+
+![](https://i.imgur.com/04TtJFw.png)
+
+* [home-assistant.yaml](home-assistant/home-assistant.yaml)
+* Home Assistant configuration & settings are persisted to a [configuration repo](https://github.com/billimek/home-assistant-config)
+
+# kei
+
+[kei](https://github.com/rhoopr/kei) is a fast iCloud Photos sync engine
+
+# seerr
+
+[seerr](https://github.com/seerr-team/seerr) is an open-source media request and discovery manager for Jellyfin, Plex, and Emby (successor to Overseerr/Jellyseerr)
+
+# minecraft
+
+Using the [minecraft server](https://hub.docker.com/r/itzg/minecraft-server) container images to run multiple different minecraft servers.
+
+![](https://i.imgur.com/zBha0RP.png)
+
+* [minecraft-creative.yaml](minecraft/minecraft-creative.yaml)
+* [minecraft-survival.yaml](minecraft/minecraft-survival.yaml)
+* [minecraft-bedrock.yaml](minecraft/minecraft-bedrock.yaml)
+
+# mosquitto
+
+[mosquitto](https://mosquitto.org/) is an MQTT broker used for home automation messaging
+
+# mousetrap
+
+[mousetrap](https://github.com/sirjmann92/mousetrap) is an automated MyAnonaMouse (MaM) IP/ASN/perk management tool
+
+# node-red
+
+![](https://i.imgur.com/ABTbYw1.png)
+
+Rules-engine for automations
+
+* [node-red.yaml](node-red/node-red.yaml)
+* Node-Red configuration is persisted to a [configuration repo](https://github.com/billimek/node-red-config)
+
+# plex
+
+![](https://i.imgur.com/nDyS9OA.jpg)
+
+[Plex](https://www.plex.tv/) is a home media solution.
+
+* [plex.yaml](plex/plex.yaml)
+
+# prowlarr
+
+prowlarr is a movie/tv show indexer manager for sonarr/radarr
+
+
+# qbittorrent
+
+qbittorrent is a torrent client
+
+# qui
+
+[qui](https://github.com/autobrr/qui) is a fast, modern qBittorrent web UI supporting multiple instances and cross-seeding
+
+# radarr
+
+![](https://i.imgur.com/eAgWySC.png)
+
+[Radarr](https://github.com/Radarr/Radarr) is a movie downloader
+
+* [radarr.yaml](radarr/radarr.yaml)
+
+# recyclarr
+
+recyclarr is a tool to help manage and maintain your sonarr/radarr library
+
+# sabnzbd
+
+![](https://i.imgur.com/wMZUuM1.png)
+
+[Sabnzbd](https://github.com/sabnzbd/sabnzbd) is an efficient usenet downloading client (nzbget is now abandoned).
+
+* [sabnzbd.yaml](nzbget/sabnzbd.yaml)
+
+# ser2sock
+
+[ser2sock](https://github.com/nutechsoftware/ser2sock) is a serial to socket redirector.  This is used to bridge a home alarm panel to home-assistant for home automation.
+
+* [ser2sock.yaml](ser2sock/ser2sock.yaml)
+
+# shelfmark
+
+[shelfmark](https://github.com/calibrain/shelfmark) is a self-hosted web interface for searching and downloading books and audiobooks from multiple sources, with Audiobookshelf integration
+
+# sonarr
+
+![](https://i.imgur.com/0CS5ADs.png)
+
+[Sonarr](https://github.com/Sonarr/Sonarr) is a tv show downloader
+
+* [sonarr.yaml](sonarr/sonarr.yaml)
+
+# tautulli
+
+tautulli is a plex monitoring tool
+
+# teslamate
+
+![](https://i.imgur.com/qNlrxjH.png)
+![](https://i.imgur.com/f12RcId.png)
+
+[teslamate](https://github.com/adriankumpf/teslamate) is a tool and collection of grafana dashboards which collect metrics and observability data about your tesla vehicle.
+
+* [teslamate.yaml](teslamate/teslamate.yaml)
+
+# unifi
+
+![](https://i.imgur.com/uakfLZo.png)
+
+[ubiquiti unifi controller](https://github.com/jacobalberty/unifi-docker) for wireless access points and home networking
+
+* [unifi.yaml](unifi/unifi.yaml)
+
+# zwave2mqtt
+
+![](https://i.imgur.com/Odhu4gJ.png)
+
+[zwave2mqtt](https://github.com/zwave-js/zwave-js-ui) for controlling z-wave devices from a connected zwave controller and publishing over MQTT or websocket
+
+* [zwave2mqtt.yaml](zwave2mqtt/zwave2mqtt.yaml)

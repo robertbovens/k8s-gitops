@@ -1,0 +1,56 @@
+---
+# yaml-language-server: $schema=https://kube-schemas.pages.dev/monitoring.coreos.com/prometheusrule_v1.json
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: speedtest-exporter-rules
+  namespace: monitoring
+spec:
+  groups:
+    - name: speedtest-exporter.rules
+      rules:
+        - alert: SpeedtestExporterAbsent
+          annotations:
+            description: Speedtest Exporter has disappeared from Prometheus target discovery.
+            summary: Speedtest Exporter is down.
+          expr: |
+            absent(up{job=~".*speedtest-exporter.*"} == 1)
+          for: 75m
+          labels:
+            severity: critical
+        - alert: SpeedtestSlowInternetDownload
+          annotations:
+            description: Internet download speed is averaging {{ humanize $value }} bytes/s.
+            summary: SpeedTest slow internet download.
+          expr: |
+            # Exclude Tata Communications (server_id 73614) - this Atlanta-listed server is a
+            # tier-1 global backbone provider whose test endpoint consistently delivers ~17 MB/s
+            # vs ~100-112 MB/s from all other local servers. Ookla's auto-selection picks it due
+            # to low ping latency, but it is not representative of actual connection performance.
+            # See: kubectl exec -n monitoring deploy/speedtest-exporter -- speedtest --servers
+            avg_over_time(speedtest_download_bandwidth_bytes{job=~".*speedtest-exporter.*",server_id!="73614"}[4h])
+              < 50000000
+          for: 1h
+          labels:
+            severity: warning
+        - alert: SpeedtestSlowInternetUpload
+          annotations:
+            description: Internet upload speed is averaging {{ humanize $value }} bytes/s.
+            summary: SpeedTest slow internet upload.
+          expr: |
+            # Exclude Tata Communications (server_id 73614) - see SpeedtestSlowInternetDownload comment.
+            avg_over_time(speedtest_upload_bandwidth_bytes{job=~".*speedtest-exporter.*",server_id!="73614"}[4h])
+              < 50000000
+          for: 1h
+          labels:
+            severity: warning
+        - alert: SpeedtestHighPingLatency
+          annotations:
+            description: Internet ping latency is averaging {{ humanize $value }} s.
+            summary: SpeedTest high ping latency.
+          expr: |
+            avg_over_time(speedtest_ping_latency_seconds{job=~".*speedtest-exporter.*"}[4h])
+              > 0.020
+          for: 0m
+          labels:
+            severity: warning

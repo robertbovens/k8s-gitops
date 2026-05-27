@@ -1,0 +1,165 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: frigate
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  suspend: false
+  values:
+    defaultPodOptions:
+      resourceClaims:
+        - name: gpu
+          resourceClaimTemplateName: frigate
+      affinity:
+        nodeAffinity:
+          # Soft preferences - scheduler tries these in order but allows fallback
+          preferredDuringSchedulingIgnoredDuringExecution:
+            # Tier 1: Intel N100 (Gen 12 Xe) - Best for OpenVINO inference
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-gen
+                    operator: In
+                    values:
+                      - "12"
+            # Tier 2: Coffee Lake UHD 630 - Good OpenVINO performance
+            - weight: 70
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-family
+                    operator: In
+                    values:
+                      - "coffeelake"
+            # Tier 3: Kaby Lake HD 630 - Acceptable OpenVINO performance
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-family
+                    operator: In
+                    values:
+                      - "kabylake"
+
+    controllers:
+      main:
+        containers:
+          main:
+            image:
+              repository: ghcr.io/blakeblackshear/frigate
+              tag: 0.17.1@sha256:1724960349dad0bd2ae8ec884171a6fd5755a4dc242a0e66cadbda9c0e85c99b
+            env:
+              TZ: America/New_York
+            envFrom:
+              - secretRef:
+                  name: frigate-secret
+
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/version
+                    port: &port 5000
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness: *probes
+              startup:
+                enabled: false
+
+            resources:
+              claims:
+                - name: gpu
+              requests:
+                memory: 1800Mi
+                cpu: 1500m
+              limits:
+                memory: 5000Mi
+            securityContext:
+              capabilities:
+                add:
+                  - PERFMON
+
+    persistence:
+      config:
+        existingClaim: frigate-config
+        globalMounts:
+          - path: /config
+      config-file:
+        type: configMap
+        name: frigate-configmap
+        globalMounts:
+          - path: /config/config.yml
+            subPath: config.yml
+            readOnly: true
+      media:
+        type: custom
+        volumeSpec:
+          nfs:
+            server: "nas.home"
+            path: /mnt/tank/media
+        globalMounts:
+          - path: /media
+      cache:
+        type: emptyDir
+        medium: Memory
+        sizeLimit: 4Gi
+        globalMounts:
+          - path: /dev/shm
+
+    rawResources:
+      gpu:
+        manifest:
+          apiVersion: resource.k8s.io/v1
+          kind: ResourceClaimTemplate
+          spec:
+            spec:
+              devices:
+                requests:
+                  - name: gpu
+                    exactly:
+                      deviceClassName: gpu.intel.com
+
+    route:
+      main:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - frigate.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: frigate
+                port: *port
+
+    service:
+      main:
+        controller: main
+        ports:
+          http:
+            appProtocol: kubernetes.io/ws
+            port: 5000
+            primary: true
+          go2rtc:
+            enabled: true
+            port: 1984
+          rtsp:
+            enabled: true
+            port: 8554

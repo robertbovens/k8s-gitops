@@ -1,0 +1,35 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  packageRules: [
+    {
+      description: "Hold Talos at v1.13.2 - v1.13.3 panics RenderConfigsStaticPodController (siderolabs/talos#13445)",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/siderolabs/installer", "ghcr.io/siderolabs/talosctl"],
+      allowedVersions: "<=1.13.2",
+    },
+    {
+      description: "Override Helmfile Dependency Name",
+      matchDatasources: ["docker"],
+      matchManagers: ["helmfile"],
+      overrideDepName: "{{packageName}}",
+    },
+    {
+      description: "Talos - 5-day cooldown before raising upgrade PRs",
+      matchDatasources: ["docker", "github-releases"],
+      matchPackageNames: ["ghcr.io/siderolabs/installer", "ghcr.io/siderolabs/talosctl", "/factory\\.talos\\.dev/"],
+      minimumReleaseAge: "5 days",
+    },
+    {
+      description: "Override Talos Installer Package Name",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["/factory\\.talos\\.dev/"],
+      overridePackageName: "ghcr.io/siderolabs/installer",
+    },
+    {
+      description: "pennydreadful/bookshelf uses prefixed tags with 4-part versions",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/pennydreadful/bookshelf"],
+      versioning: "regex:^softcover-v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$",
+    },
+  ],
+}

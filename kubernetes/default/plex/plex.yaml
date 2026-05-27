@@ -1,0 +1,200 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: plex
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      resourceClaims:
+        - name: gpu
+          resourceClaimTemplateName: plex
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: [44]
+      affinity:
+        nodeAffinity:
+          # Soft preferences - scheduler tries these in order but allows fallback
+          preferredDuringSchedulingIgnoredDuringExecution:
+            # Tier 1: Intel N100 (Gen 12 Xe) - Best transcoding + AV1 decode
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-gen
+                    operator: In
+                    values:
+                      - "12"
+            # Tier 2: Coffee Lake UHD 630 - Excellent transcoding
+            # Includes: k8s-i (i5-8500T), k8s-a (i5-9500T via GVT-g when fixed)
+            - weight: 70
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-family
+                    operator: In
+                    values:
+                      - "coffeelake"
+            # Tier 3: Kaby Lake HD 630 - Good transcoding
+            # Includes: k8s-b (i3-7100)
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: intel.feature.node.kubernetes.io/gpu-family
+                    operator: In
+                    values:
+                      - "kabylake"
+
+    controllers:
+      plex:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/home-operations/plex
+              tag: 1.43.2.10687@sha256:be00a2ad851ea3193cd870636f908eb6425ad89390f23cdb08daa35ab5cceacc
+            env:
+              TZ: "America/New_York"
+              PLEX_ADVERTISE_URL: https://10.0.6.53:32400,https://plex.eviljungle.com:443
+              PLEX_NO_AUTH_NETWORKS: "172.17.0.0/16,10.0.2.0/24,10.0.7.0/24,10.0.3.0/24,10.244.0.0/16"
+            envFrom:
+              - secretRef:
+                  name: plex-secret
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /identity
+                    port: &port 32400
+                  initialDelaySeconds: 0
+                  periodSeconds: 10
+                  timeoutSeconds: 1
+                  failureThreshold: 3
+              readiness: *probes
+              startup:
+                enabled: true
+                spec:
+                  failureThreshold: 30
+                  periodSeconds: 10
+            resources:
+              claims:
+                - name: gpu
+              requests:
+                cpu: 500m
+                memory: 2Gi
+              limits:
+                memory: 5Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+
+    persistence:
+      config:
+        existingClaim: plex-config
+      # Separate PVC for cache to avoid backing up cache files
+      # This must be commented on initial install in order to avoid permission issues in '/config/Library/Application Support/Plex Media Server'
+      plex-cache:
+        storageClass: "ceph-block"
+        accessMode: ReadWriteOnce
+        size: "55Gi"
+        globalMounts:
+          - path: /config/Library/Application Support/Plex Media Server/Cache
+      # This must be commented on initial install in order to avoid permission issues in '/config/Library/Application Support/Plex Media Server'
+      nfs-nas-media:
+        type: nfs
+        server: nas.home
+        path: /mnt/tank/media
+        globalMounts:
+          - path: /data
+      tmpfs:
+        type: emptyDir
+        advancedMounts:
+          plex:
+            app:
+              - path: /config/Library/Application Support/Plex Media Server/Logs
+                subPath: logs
+              - path: /transcode
+                subPath: transcode
+              - path: /tmp
+                subPath: tmp
+
+    rawResources:
+      gpu:
+        manifest:
+          apiVersion: resource.k8s.io/v1
+          kind: ResourceClaimTemplate
+          spec:
+            spec:
+              devices:
+                requests:
+                  - name: gpu
+                    exactly:
+                      deviceClassName: gpu.intel.com
+
+    route:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/external: "true"
+          gatus.home-operations.com/endpoint: |-
+            url: https://plex.eviljungle.com/identity
+        parentRefs:
+          - name: public
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - &host plex.eviljungle.com
+        rules:
+          - backendRefs:
+              - identifier: gateway
+                port: *port
+            timeouts:
+              backendRequest: 3600s
+      internal:
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          gatus.home-operations.com/endpoint: |-
+            url: https://plex.eviljungle.com/identity
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - *host
+        rules:
+          - backendRefs:
+              - identifier: gateway
+                port: *port
+            timeouts:
+              backendRequest: 3600s
+
+    service:
+      app:
+        controller: plex
+        externalTrafficPolicy: Local
+        loadBalancerIP: 10.0.6.53
+        ports:
+          http:
+            port: &port 32400
+        type: LoadBalancer
+      # Separate ClusterIP service for Gateway API routing
+      gateway:
+        controller: plex
+        ports:
+          http:
+            port: *port
+        type: ClusterIP

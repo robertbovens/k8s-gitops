@@ -1,0 +1,77 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      # Ensure this only runs on the control plane node
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+
+    controllers:
+      etcd-backup:
+        type: cronjob
+        cronjob:
+          # Run every 6 hours at 10 minutes past the hour
+          schedule: "10 0/6 * * *"
+          concurrencyPolicy: Forbid
+          failedJobsHistory: 1
+          successfulJobsHistory: 1
+        pod:
+          restartPolicy: OnFailure
+        containers:
+          app:
+            image:
+              repository: ghcr.io/siderolabs/talos-backup
+              tag: v0.1.0-beta.3@sha256:0741255027c4dcae6bb8d4e18a824ba73c431d11b3dff4967e95b9ff5388cb85
+            command:
+              - /talos-backup
+            env:
+              CLUSTER_NAME: home
+              ENABLE_COMPRESSION: "true"
+              HOME: /tmp
+            envFrom:
+              - secretRef:
+                  name: etcd-backup-s3-secret
+            resources:
+              requests:
+                cpu: 10m
+                memory: 64Mi
+              limits:
+                memory: 256Mi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsGroup: 1000
+              runAsNonRoot: true
+              runAsUser: 1000
+              seccompProfile:
+                type: RuntimeDefault
+            workingDir: /tmp
+
+    persistence:
+      tmp:
+        type: emptyDir
+        globalMounts:
+          - path: /tmp
+      talos-secrets:
+        type: secret
+        name: etcd-backup
+        globalMounts:
+          - path: /var/run/secrets/talos.dev
+            readOnly: true

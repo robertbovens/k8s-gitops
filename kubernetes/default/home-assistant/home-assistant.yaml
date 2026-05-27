@@ -1,0 +1,202 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: home-assistant
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    controllers:
+      home-assistant:
+        pod:
+          securityContext:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+
+        containers:
+          app:
+            image:
+              repository: ghcr.io/home-operations/home-assistant
+              tag: 2026.5.4@sha256:42d1bc5e99ed0ae8f49b72b8994e25e1a6b0f1467ba26c1b959f54ca42541ffd
+            env:
+              TZ: "America/New_York"
+            envFrom:
+              - secretRef:
+                  name: home-assistant-secret
+
+            probes:
+              liveness:
+                enabled: true
+              readiness:
+                enabled: true
+              startup:
+                enabled: true
+                spec:
+                  periodSeconds: 10
+                  failureThreshold: 60
+
+            resources:
+              requests:
+                cpu: 50m
+                memory: 512M
+              limits:
+                memory: 2Gi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+
+          code-server:
+            image:
+              repository: ghcr.io/coder/code-server
+              tag: 4.121.0@sha256:ea5f42d99998e2ba44297eca9b8a38a101e718ef54caaa41d649f6c6f1c8c71e
+            args:
+              - --auth
+              - none
+              - --disable-telemetry
+              - --disable-update-check
+              - --user-data-dir
+              - /config/.vscode
+              - --extensions-dir
+              - /config/.vscode
+              - --port
+              - "12321"
+              - /config
+            env:
+              HASS_SERVER: http://localhost:8123
+              TZ: America/New_York
+            resources:
+              requests:
+                cpu: 10m
+              limits:
+                memory: 1Gi
+
+    persistence:
+      config:
+        existingClaim: home-assistant-config
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config
+            code-server:
+              - path: /config
+      hass-cache:
+        storageClass: "ceph-block"
+        accessMode: ReadWriteOnce
+        size: "1Gi"
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /config/.venv
+                subPath: hass-venv
+      tmpfs:
+        type: emptyDir
+        advancedMounts:
+          home-assistant:
+            app:
+              - path: /tmp
+                subPath: hass-tmp
+            code-server:
+              - path: /tmp
+                subPath: code-server-tmp
+              - path: /nonexistent
+                subPath: nonexistent
+      hass-gcp-sa-json:
+        type: secret
+        name: home-assistant-gcp-sa-secret
+        globalMounts:
+          - path: /config/home-assistant-7c48d-e078848c9fb0.json
+            subPath: home-assistant-7c48d-e078848c9fb0.json
+            readOnly: true
+      docker-env-empty:
+        # enabled: true
+        type: emptyDir
+        globalMounts:
+          - path: /.dockerenv
+            subPath: .dockerenv
+            readOnly: true
+
+    route:
+      app:
+        annotations:
+          external-dns.alpha.kubernetes.io/external: "true"
+        parentRefs:
+          - name: public
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - &host "hass.eviljungle.com"
+        rules:
+          - backendRefs:
+              - identifier: gateway
+                port: 8123
+      internal:
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - *host
+        rules:
+          - backendRefs:
+              - identifier: gateway
+                port: 8123
+      code:
+        enabled: true
+        annotations:
+          external-dns.alpha.kubernetes.io/internal: "true"
+          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - hass-vscode.eviljungle.com
+        rules:
+          - matches:
+              - path:
+                  type: PathPrefix
+                  value: /
+            backendRefs:
+              - name: home-assistant-code
+                port: 12321
+
+    service:
+      main:
+        controller: home-assistant
+        externalTrafficPolicy: Local
+        forceRename: home-assistant
+        loadBalancerIP: 10.0.6.56
+        ports:
+          http:
+            port: 8123
+        primary: true
+        type: LoadBalancer
+      # Separate ClusterIP service for Gateway API routing
+      gateway:
+        controller: home-assistant
+        ports:
+          http:
+            port: 8123
+        type: ClusterIP
+      code:
+        controller: home-assistant
+        ports:
+          http:
+            port: 12321
+        type: ClusterIP

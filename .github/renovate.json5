@@ -1,152 +1,48 @@
 {
-  "extends": [
-    "config:base",
-    "docker:enableMajor",
-    ":disableRateLimiting",
-    ":dependencyDashboard",
-    ":semanticCommits",
-    ":enablePreCommit",
-    ":automergeDigest",
-    ":automergeBranchPush",
-    // "docker:pinDigests",
-    "github>billimek/k8s-gitops//.github/renovate/allowedVersions.json5",
-    "github>billimek/k8s-gitops//.github/renovate/autoMerge.json5",
-    "github>billimek/k8s-gitops//.github/renovate/disabledDatasources.json5",
-    "github>billimek/k8s-gitops//.github/renovate/groups.json5",
-    "github>billimek/k8s-gitops//.github/renovate/semantic-commits.json5",
-    "helpers:pinGitHubActionDigests"
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'docker:enableMajor',
+    'helpers:pinGitHubActionDigests',
+    'github>billimek/k8s-gitops//.renovate/allowedVersions.json5',
+    'github>billimek/k8s-gitops//.renovate/autoMerge.json5',
+    'github>billimek/k8s-gitops//.renovate/customManagers.json5',
+    'github>billimek/k8s-gitops//.renovate/grafanaDashboards.json5',
+    'github>billimek/k8s-gitops//.renovate/overrides.json5',
+    'github>billimek/k8s-gitops//.renovate/groups.json5',
+    'github>billimek/k8s-gitops//.renovate/labels.json5',
+    'github>billimek/k8s-gitops//.renovate/semanticCommits.json5',
+    ':disableRateLimiting',
+    ':dependencyDashboard',
+    ':semanticCommits',
+    ':timezone(America/New_York)',
   ],
-  "enabled": true,
-  "timezone": "America/New_York",
-  "semanticCommits": "enabled",
-  "platform": "github",
-  // "username": "billimek",
-  "gitAuthor": "Jeff Billimek <billimek@users.noreply.github.com>",
-  "repositories": ["billimek/k8s-gitops"],
-  "onboarding": false,
-  "requireConfig": "optional",
-  "commitBodyTable": true,
-  "dependencyDashboard": true,
-  "dependencyDashboardTitle": "Renovate (Mend) Dashboard",
-  "commitBody": "Signed-off-by: Jeff Billimek <billimek@users.noreply.github.com>",
-  // Do not notify on closed unmerged PRs
-  "suppressNotifications": ["prIgnoreNotification"],
-  // Do not rebase PRs
-  "rebaseWhen": "conflicted",
-  "commitMessageTopic": "{{depName}}",
-  "commitMessageExtra": "to {{newVersion}}",
-  "commitMessageSuffix": "",
-  "helm-values": {
-    "fileMatch": ["./.+\\.yaml$"]
-  },
-  "flux": {
-    "fileMatch": ["./.+\\.yaml$"]
-  },
-  "kubernetes": {
-    "fileMatch": ["\\.yaml$"],
-    "ignorePaths": [
-      "flux-system/",
-      ".github"
+
+  rebaseWhen: 'auto',
+  platformAutomerge: true,
+
+  dependencyDashboardTitle: 'Renovate Dashboard 🤖',
+  suppressNotifications: [
+    'prEditedNotification',
+    'prIgnoreNotification',
+  ],
+
+  flux: {
+    managerFilePatterns: [
+      '/(^|/)kubernetes/.+\\.ya?ml$/',
+      '/(^|/)setup/.+\\.ya?ml$/',
     ],
   },
-  "regexManagers": [
-    {
-      "fileMatch": ["./.+\\.yaml$"],
-      "matchStrings": [
-        "registryUrl=(?<registryUrl>.*?)\n *chart: (?<depName>.*?)\n *version: (?<currentValue>.*)\n"
-      ],
-      "datasourceTemplate": "helm"
-    }
-  ],
-  // "regexManagers": [
-  //   {
-  //     "description": ["Process various dependencies in YAML files"],
-  //     "fileMatch": [".+\\.ya?ml$"],
-  //     "matchStrings": [
-  //       "# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)( versioning=(?<versioning>.*=?))?( versionTemplate=(?<versionTemplate>.*=?))?\\n.*: ?(\"?(?<currentValue>[^\"\\n]+=?)\"?)"
-  //     ],
-  //     "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
-  //     "extractVersionTemplate": "{{#if versionTemplate}}{{{versionTemplate}}}{{else}}{{/if}}"
-  //   }
-  // ],
-  "packageRules": [
-    // Setup datasources
-    {
-      "datasources": ["helm"],
-      "commitMessageTopic": "Helm chart {{depName}}",
-      "semanticCommitScope": "charts",
-      "separateMinorPatch": true,
-      "ignoreDeprecated": true
-    },
-    {
-      "datasources": ["docker"],
-      "commitMessageTopic": "Docker image {{depName}}",
-      "commitMessageExtra": "to {{#if isSingleVersion}}{{{toVersion}}}{{else}}{{{newValue}}}{{/if}}",
-      "updateTypes": ["major", "minor", "patch"],
-      "enabled": true
-    },
-    {
-      "matchDatasources": ["docker"],
-      "semanticCommitScope": "images",
-      "separateMinorPatch": true
-    },
-    // add labels according to package and update types
-    {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["major"],
-      "commitMessagePrefix": "feat(images)!: ",
-      "labels": ["renovate/image", "dep/major"]
-    },
-    {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["minor"],
-      "semanticCommitType": "feat",
-      "labels": ["renovate/image", "dep/minor"]
-    },
-    {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["patch"],
-      "semanticCommitType": "fix",
-      "labels": ["renovate/image", "dep/patch"]
-    },
-    {
-      "matchDatasources": ["helm"],
-      "matchUpdateTypes": ["major"],
-      "commitMessagePrefix": "feat(charts)!: ",
-      "labels": ["renovate/helm", "dep/major"]
-    },
-    {
-      "matchDatasources": ["helm"],
-      "matchUpdateTypes": ["minor"],
-      "semanticCommitType": "feat",
-      "labels": ["renovate/helm", "dep/minor"]
-    },
-    {
-      "matchDatasources": ["helm"],
-      "matchUpdateTypes": ["patch"],
-      "semanticCommitType": "fix",
-      "labels": ["renovate/helm", "dep/patch"]
-    },
-    // Custom versions
-    {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["blakeblackshear/frigate"],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<compatibility>.*)$"
-    },
-    {
-      "datasources": ["docker"],
-      "versionScheme": "regex:^nightly-0\\.(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
-      "packageNames": ["hotio/readarr"]
-    },
-    {
-      "datasources": ["docker"],
-      "versioning": "loose",
-      "packageNames": ["ghcr.io/onedr0p/plex"]
-    },
-    {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["docker.io/timberio/vector"],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<compatibility>.*)$"
-    },
-  ],
+  'helm-values': {
+    managerFilePatterns: [
+      '/(^|/)kubernetes/.+\\.ya?ml$/',
+      '/(^|/)setup/.+\\.ya?ml$/',
+    ],
+  },
+  kubernetes: {
+    managerFilePatterns: [
+      '/(^|/)kubernetes/.+\\.ya?ml$/',
+      '/(^|/)setup/.+\\.ya?ml$/',
+    ],
+  },
 }
