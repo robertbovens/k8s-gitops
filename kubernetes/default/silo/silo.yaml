@@ -1,0 +1,290 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: silo
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      resourceClaims:
+        - name: gpu
+          resourceClaimName: silo
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: [44]
+
+    externalSecrets:
+      silo:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: silo-secret
+          template:
+            data:
+              SECRET_KEY: "{{ .SECRET_KEY }}"
+              SILO_NODE_KEY: "{{ .SILO_NODE_KEY }}"
+              DATABASE_URL: "postgres://silo:{{ urlquery .SILO_POSTGRES_PASS }}@postgres-rw.default.svc.cluster.local:5432/silo"
+              REDIS_URL: "redis://:{{ urlquery .VALKEY_PASSWORD }}@valkey.default.svc.cluster.local:6379/0"
+        dataFrom:
+          - extract:
+              key: silo
+          - extract:
+              key: valkey
+
+    controllers:
+      silo:
+        containers:
+          app:
+            image: &image
+              repository: ghcr.io/silo-server/silo-server
+              tag: build-2906@sha256:e3dd41a86d5d35a9ca6fba46b6546d09d42a5b32c2743094d058d48e74b1ae7f
+            command: &command
+              - silo
+            env: &env
+              PORT: &port 8080
+              JF_PORT: &jfPort 8096
+              HOME: /tmp
+              SILO_METRICS_LISTEN: :9091
+              SILO_PLUGIN_CACHE_DIR: /tmp/silo-plugins
+              SILO_TRUSTED_PROXIES: 10.244.0.0/16
+            envFrom: &envFrom
+              - secretRef:
+                  name: silo-secret
+            probes:
+              liveness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/v1/health
+                    port: *port
+              readiness:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/v1/ready
+                    port: *port
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/v1/health
+                    port: *port
+                  periodSeconds: 10
+                  failureThreshold: 60
+            resources:
+              claims:
+                - name: gpu
+              requests:
+                cpu: 100m
+                memory: 2Gi
+              limits:
+                memory: 6Gi
+            securityContext: &securityContext
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+
+      transcode:
+        type: statefulset
+        replicas: 1
+        statefulset:
+          podManagementPolicy: Parallel
+          serviceName:
+            identifier: transcode
+        pod:
+          terminationGracePeriodSeconds: 700
+          resourceClaims:
+            - name: gpu
+              resourceClaimName: igpu-media
+        initContainers:
+          wait-for-api:
+            image:
+              repository: busybox
+              tag: 1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+            command:
+              - /bin/sh
+              - -c
+              - until wget -q -O /dev/null http://silo-app.default.svc.cluster.local:8080/api/v1/ready; do sleep 3; done
+            securityContext: *securityContext
+        containers:
+          app:
+            image: *image
+            command: *command
+            env:
+              <<: *env
+              MODE: transcode
+              SILO_CORE_URL: http://silo-app.default.svc.cluster.local:8080
+              SILO_NODE_KEY:
+                valueFrom:
+                  secretKeyRef:
+                    name: silo-secret
+                    key: SILO_NODE_KEY
+            probes:
+              liveness: &nodeProbe
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /api/v1/health
+                    port: *port
+              readiness: *nodeProbe
+            resources:
+              claims:
+                - name: gpu
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                memory: 4Gi
+            securityContext: *securityContext
+
+    persistence:
+      config:
+        existingClaim: silo-config
+        advancedMounts:
+          silo:
+            app:
+              - path: /config/silo
+      config-node:
+        type: emptyDir
+        advancedMounts:
+          transcode:
+            app:
+              - path: /config/silo
+      nfs-nas-media:
+        type: nfs
+        server: nas.home
+        path: /mnt/tank/media
+        globalMounts:
+          - path: /mnt/media
+            readOnly: true
+      tmpfs:
+        type: emptyDir
+        globalMounts:
+          - path: /tmp
+
+    rawResources:
+      gpu:
+        manifest:
+          apiVersion: resource.k8s.io/v1
+          kind: ResourceClaim
+          spec:
+            devices:
+              requests:
+                - name: gpu
+                  exactly:
+                    deviceClassName: gpu.intel.com
+
+    route:
+      app:
+        annotations:
+          gatus.home-operations.com/endpoint: |-
+            url: https://silo.eviljungle.com/api/v1/health
+        parentRefs:
+          - name: public
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - &host silo.eviljungle.com
+        rules:
+          - backendRefs:
+              - identifier: app
+                port: *port
+            timeouts:
+              backendRequest: 3600s
+      internal:
+        annotations:
+          gatus.home-operations.com/endpoint: |-
+            url: https://silo.eviljungle.com/api/v1/health
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - *host
+        rules:
+          - backendRefs:
+              - identifier: app
+                port: *port
+            timeouts:
+              backendRequest: 3600s
+      jellyfin:
+        annotations:
+          gatus.home-operations.com/endpoint: |-
+            url: https://silo-jf.eviljungle.com/System/Info/Public
+        parentRefs:
+          - name: internal
+            namespace: kube-system
+            sectionName: https
+        hostnames:
+          - silo-jf.eviljungle.com
+        rules:
+          - backendRefs:
+              - identifier: app
+                port: *jfPort
+            timeouts:
+              backendRequest: 3600s
+
+    service:
+      app:
+        controller: silo
+        ports:
+          http:
+            port: *port
+          jellyfin:
+            port: *jfPort
+          metrics:
+            port: 9091
+      transcode:
+        controller: transcode
+        clusterIP: None
+        ports:
+          http:
+            port: *port
+
+    serviceMonitor:
+      app:
+        serviceName: silo-app
+        endpoints:
+          - port: metrics
+            relabelings:
+              - sourceLabels: [__meta_kubernetes_pod_name]
+                targetLabel: instance
+              - targetLabel: job
+                replacement: silo
+              - targetLabel: cluster
+                replacement: home
+              - targetLabel: process_role
+                replacement: api
+      transcode:
+        serviceName: silo-transcode
+        endpoints:
+          - port: http
+            relabelings:
+              - sourceLabels: [__meta_kubernetes_pod_name]
+                targetLabel: instance
+              - targetLabel: job
+                replacement: silo
+              - targetLabel: cluster
+                replacement: home
+              - targetLabel: process_role
+                replacement: transcode

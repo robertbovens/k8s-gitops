@@ -1,0 +1,143 @@
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/source.toolkit.fluxcd.io/ocirepository_v1.json
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: forgejo
+  namespace: default
+spec:
+  interval: 1h
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+  ref:
+    tag: 17.3.3
+  url: oci://code.forgejo.org/forgejo-helm/forgejo
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: forgejo
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: forgejo
+  interval: 1h
+  values:
+    replicaCount: 1
+    strategy:
+      type: Recreate
+
+    podSecurityContext:
+      fsGroup: 1000
+
+    persistence:
+      enabled: true
+      create: true
+      claimName: forgejo-config
+      size: 10Gi
+      storageClass: ceph-block
+
+    gitea:
+      admin:
+        existingSecret: forgejo-admin
+      metrics:
+        enabled: true
+        serviceMonitor:
+          enabled: false # replaced by servicemonitor.yaml, which relabels job to gitea-http
+      config:
+        APP_NAME: "Forgejo"
+        metrics:
+          ENABLED_ISSUE_BY_LABEL: true
+          ENABLED_ISSUE_BY_REPOSITORY: true
+        server:
+          DOMAIN: git.eviljungle.com
+          ROOT_URL: https://git.eviljungle.com/
+          SSH_DOMAIN: git.eviljungle.com
+        security:
+          # Required for Forgejo to trust Envoy's X-Forwarded-* headers, so API 404s
+          # come back as JSON instead of a 302 redirect with an HTML body.
+          REVERSE_PROXY_TRUSTED_PROXIES: 10.244.0.0/16
+        service:
+          # single-admin instance; accounts for renovate/CI are created manually
+          DISABLE_REGISTRATION: true
+        actions:
+          # Points straight at github.com so .forgejo/workflows/* can reference arbitrary GitHub Actions.
+          DEFAULT_ACTIONS_URL: https://github.com
+        webhook:
+          # Allows webhook delivery to renovate-operator's in-cluster receiver.
+          ALLOWED_HOST_LIST: "*.default.svc.cluster.local"
+        repository:
+          DISABLE_DOWNLOAD_SOURCE_ARCHIVES: true
+        repository.pull-request:
+          DEFAULT_DELETE_BRANCH_AFTER_MERGE: true
+          DEFAULT_MERGE_STYLE: squash
+        indexer:
+          ISSUE_INDEXER_TYPE: bleve
+          REPO_INDEXER_ENABLED: true
+        cron.archive_cleanup:
+          ENABLED: true
+          RUN_AT_START: true
+          SCHEDULE: "@every 1h"
+          OLDER_THAN: 2h
+        repository.signing:
+          FORMAT: ssh
+          SIGNING_KEY: /data/signing/ed25519.pub
+          SIGNING_NAME: git.eviljungle.com Instance
+          SIGNING_EMAIL: noreply@git.eviljungle.com
+          INITIAL_COMMIT: pubkey
+          CRUD_ACTIONS: pubkey, parentsigned
+          WIKI: never
+          MERGES: pubkey
+        mailer:
+          ENABLED: true
+          PROTOCOL: smtp+starttls
+          SMTP_ADDR: smtp.mail.me.com
+          SMTP_PORT: 587
+          FROM: "Forgejo <jeff@eviljungle.com>"
+
+    deployment:
+      env:
+        - name: GITEA__mailer__USER
+          valueFrom:
+            secretKeyRef:
+              name: forgejo-admin
+              key: SMTP_USER
+        - name: GITEA__mailer__PASSWD
+          valueFrom:
+            secretKeyRef:
+              name: forgejo-admin
+              key: SMTP_PASSWD
+
+    extraVolumes:
+      - name: signing-key
+        secret:
+          secretName: forgejo-admin
+          defaultMode: 0o400
+    extraInitVolumeMounts:
+      - name: signing-key
+        mountPath: /data/signing
+        readOnly: true
+    extraContainerVolumeMounts:
+      - name: signing-key
+        mountPath: /data/signing
+        readOnly: true
+
+    service:
+      http:
+        type: ClusterIP
+        port: 3000
+      ssh:
+        # Reached via the internal Gateway's TCPRoute (git.eviljungle.com:22),
+        # not a dedicated LoadBalancer IP - see gateway-internal.yaml.
+        type: ClusterIP
+        port: 22
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi

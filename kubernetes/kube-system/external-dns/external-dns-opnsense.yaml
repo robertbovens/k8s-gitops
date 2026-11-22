@@ -61,22 +61,20 @@ spec:
           limits:
             memory: 256Mi
     
-    # Sources to watch for DNS records
+    # Sources to watch for DNS records - scoped to the "internal" Gateway via --gateway-name below, so only routes attached to it are managed here
     sources:
-      - service
       - gateway-httproute
-    
+
     # Only manage eviljungle.com domain
     domainFilters:
       - eviljungle.com
-    
+
     # Unique identifier for this external-dns instance
     txtOwnerId: k8s-internal
-    
+
     # Extra arguments for external-dns
     extraArgs:
-      - --annotation-filter=external-dns.alpha.kubernetes.io/internal in (true)
-      - --ignore-ingress-tls-spec
+      - --gateway-name=internal
     
     # Policy and registry settings
     policy: sync
@@ -97,11 +95,6 @@ spec:
     
     # Logging
     logLevel: info
-    
-    # Metrics
-    metrics:
-      enabled: true
-      port: 7979
     
     # Service monitor for Prometheus
     serviceMonitor:

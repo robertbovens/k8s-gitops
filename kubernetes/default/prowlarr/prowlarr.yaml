@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -22,13 +22,27 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      prowlarr:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: prowlarr-secret
+        data:
+          - secretKey: api_key
+            remoteRef:
+              key: prowlarr
+              property: api_key
+
     controllers:
       prowlarr:
         containers:
           app:
             image:
               repository: ghcr.io/home-operations/prowlarr
-              tag: 2.3.7.5365@sha256:b9557d772c974901aed9285189d904b613f1f07750fca930eecfe78544bd3d48
+              tag: 3.0.2.5777@sha256:ff3e486e1e4c4a696daf3e69ce5ebec19539dd6aa4420a2a17ab3ddaf0cfd2d8
             env:
               PROWLARR__APP__INSTANCENAME: Prowlarr
               PROWLARR__APP__THEME: dark
@@ -75,9 +89,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

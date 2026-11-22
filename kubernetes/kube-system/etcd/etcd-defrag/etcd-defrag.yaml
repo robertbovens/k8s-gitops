@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -41,7 +41,7 @@ spec:
           app:
             image:
               repository: ghcr.io/ahrtr/etcd-defrag
-              tag: v0.40.0@sha256:3cc3433d51caabfff917268b3c8aa8f0274d5422127085a7d9f6cf219b6c4b55
+              tag: v0.48.0@sha256:0aa0248ef4e261f25e787327051ea103c8608ddb6f4ec3b732f0fd55abf5cb1b
             args:
               - --endpoints=https://127.0.0.1:2379
               - --cluster

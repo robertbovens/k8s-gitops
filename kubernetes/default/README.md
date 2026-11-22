@@ -14,14 +14,6 @@ postgresql operator for kubernetes
 
 echo server for testing
 
-# emqx
-
-![](https://i.imgur.com/uNxxBGX.png)
-
-[emqx](github.com/emqx/emqx) is a clustered MQTT broker
-
-* [emqx/](emqx/)
-
 # frigate
 
 ![](https://i.imgur.com/hv7bh6m.png)
@@ -47,6 +39,10 @@ Installs [frigate](https://github.com/blakeblackshear/frigate/): Realtime object
 
 [seerr](https://github.com/seerr-team/seerr) is an open-source media request and discovery manager for Jellyfin, Plex, and Emby (successor to Overseerr/Jellyseerr)
 
+# silo
+
+[silo](https://github.com/Silo-Server/silo-server) is a pre-release self-hosted media server with Jellyfin/Emby-compatible APIs, trialed alongside plex. Uses the shared CNPG cluster (pgvector enabled), valkey for Redis, and a transcode node StatefulSet.
+
 # minecraft
 
 Using the [minecraft server](https://hub.docker.com/r/itzg/minecraft-server) container images to run multiple different minecraft servers.
@@ -57,6 +53,13 @@ Using the [minecraft server](https://hub.docker.com/r/itzg/minecraft-server) con
 * [minecraft-survival.yaml](minecraft/minecraft-survival.yaml)
 * [minecraft-bedrock.yaml](minecraft/minecraft-bedrock.yaml)
 
+# miniflux
+
+[miniflux](https://github.com/miniflux/v2) is a minimalist feed reader. Uses the shared CNPG cluster; local admin created from 1Password on first start.
+
+* [miniflux.yaml](miniflux/miniflux.yaml)
+* [postgres.yaml](miniflux/postgres.yaml)
+
 # mosquitto
 
 [mosquitto](https://mosquitto.org/) is an MQTT broker used for home automation messaging
@@ -64,15 +67,6 @@ Using the [minecraft server](https://hub.docker.com/r/itzg/minecraft-server) con
 # mousetrap
 
 [mousetrap](https://github.com/sirjmann92/mousetrap) is an automated MyAnonaMouse (MaM) IP/ASN/perk management tool
-
-# node-red
-
-![](https://i.imgur.com/ABTbYw1.png)
-
-Rules-engine for automations
-
-* [node-red.yaml](node-red/node-red.yaml)
-* Node-Red configuration is persisted to a [configuration repo](https://github.com/billimek/node-red-config)
 
 # plex
 
@@ -115,11 +109,11 @@ recyclarr is a tool to help manage and maintain your sonarr/radarr library
 
 * [sabnzbd.yaml](nzbget/sabnzbd.yaml)
 
-# ser2sock
+# ser2net
 
-[ser2sock](https://github.com/nutechsoftware/ser2sock) is a serial to socket redirector.  This is used to bridge a home alarm panel to home-assistant for home automation.
+[ser2net](https://github.com/cminyard/ser2net) is a serial to socket redirector.  This is used to bridge a home alarm panel (AlarmDecoder) to home-assistant for home automation. Also exposes a `ser2sock` Service alias since Home Assistant's AlarmDecoder integration is configured with that hostname.
 
-* [ser2sock.yaml](ser2sock/ser2sock.yaml)
+* [ser2net.yaml](ser2net/ser2net.yaml)
 
 # shelfmark
 

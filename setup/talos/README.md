@@ -1,5 +1,12 @@
 # talos cluster setup
 
+## toolchain
+
+- `topf` and `talosctl` are not pinned in this repo; they come from the ambient
+  nix-darwin config. Cluster config lives in `topf.yaml` + `topf-patches/` and is rendered
+  and applied with `topf` (see `.justfiles/talos.just`); talhelper is no longer
+  used (see https://github.com/postfinance/topf).
+
 ## nodes
 
 ### k8s-cp
@@ -7,7 +14,7 @@
 This is a control plane node
 
 - MAC: `00:1e:06:45:0b:cd`
-- IP: 10.0.7.54
+- IP: 10.0.7.49
 - CPU: Intel Celeron J4105 (Gemini Lake, 4 cores, 4 threads)
 - RAM: 32GB
 - Disk: host - 500GB - `/dev/nvme0n1`
@@ -16,6 +23,10 @@ This is a control plane node
 ### k8s-0
 
 2025-01-02: retired this node as it was replaced by k8s-cp
+
+### k8s-f
+
+retired; removed from the cluster
 
 ### k8s-a
 
@@ -66,8 +77,8 @@ This is a worker node, bare-metal
 - IP: 10.0.7.52
 - CPU: Intel Core i3-7100 (Kaby Lake, 2 cores, 4 threads)
 - RAM: 32GB
-- Disk: host - 500GB - `/dev/nvme0n1`
-- Disk: SSD for ceph - 2TB `/dev/sda` -
+- Disk: host - 500GB - `/dev/sda` (Samsung SSD 860 EVO 500GB SATA)
+- Disk: SSD for ceph - 2TB `/dev/sdb` -
   (`/dev/disk/by-id/wwn-0x5002538c000fc709`)
 - GPU: Intel HD Graphics 630 (Kaby Lake, Gen 9.5, 24 EUs, QuickSync Gen 9)
 
@@ -79,7 +90,7 @@ This is a worker node, bare-metal
 - IP: 10.0.7.53
 - CPU: Intel Xeon D-1518 (Broadwell-DE, 8 cores, 8 threads)
 - RAM: 64GB
-- Disk: host - 1TB - `/dev/nvme0n1`
+- Disk: host - 500GB - `/dev/nvme0n1` (Crucial P3 `CT500P3SSD8`)
 - Disk: SSD for ceph - 2TB `/dev/sda` -
   (`/dev/disk/by-id/wwn-0x5002538c000cdf0f`)
 - GPU: ASPEED AST2400 BMC (not suitable for compute workloads)
@@ -103,21 +114,10 @@ This is a worker node, bare-metal
 - IP: 10.0.7.55
 - CPU: AMD Ryzen 3 3200G (Zen+, 4 cores, 4 threads)
 - RAM: 32GB
-- Disk: host - 256GB - `/dev/sdb`
+- Disk: host - 250GB - `/dev/sdb` (Samsung SSD 850 EVO 250GB SATA)
 - Disk: SSD for ceph = 2TB - `/dev/sda` - **note this is `/dev/sda`** -
   (`/dev/disk/by-id/wwn-0x5002538c000e0a55`)
 - GPU: AMD Radeon Vega 8 Graphics (integrated)
-
-### k8s-f
-
-This is a worker node, bare-metal
-
-- MAC: `68:1d:ef:34:d8:1a`
-- IP: 10.0.7.56
-- CPU: Intel N100 (Alder Lake-N, 4 cores, 4 threads)
-- RAM: 16GB
-- Disk: host - 1TB - `/dev/nvme0n1`
-- GPU: Intel UHD Graphics (Gen 12 Xe, 24 EUs, QuickSync Gen 12 with AV1 encode/decode)
 
 ### k8s-g
 

@@ -1,0 +1,6 @@
+apiVersion: v1alpha1
+kind: KubeAPIServerConfig
+certExtraSANs:
+  - k8s-cp.home
+  - k8s-0.home
+  - tailscale-operator.drake-eel.ts.net

@@ -2,6 +2,31 @@
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   packageRules: [
     {
+      description: "Auto-merge patch releases once the Claude review approves - daily",
+      matchDatasources: ["docker", "helm"],
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: false,
+      schedule: ["after 1am and before 5am"],
+      matchUpdateTypes: ["patch"],
+    },
+    {
+      description: "Blast-radius components stay manual",
+      matchDatasources: ["docker", "helm"],
+      matchUpdateTypes: ["patch"],
+      matchPackageNames: [
+        "/rook/",
+        "/ceph/",
+        "/cilium/",
+        "/cnpg/",
+        "/cloudnative-pg/",
+        "/envoy/",
+        "/siderolabs/",
+        "/talos/",
+      ],
+      automerge: false,
+    },
+    {
       description: "Auto-merge trusted containers - anytime",
       matchDatasources: ["docker"],
       automerge: true,
@@ -20,7 +45,7 @@
     },
     {
       description: "Auto-merge trusted containers - daily",
-      matchDatasources: ["docker"],
+      matchDatasources: ["docker", "helm"],
       automerge: true,
       automergeType: "pr",
       ignoreTests: false,
@@ -28,13 +53,26 @@
       matchUpdateTypes: ["minor", "patch"],
       matchPackageNames: [
         "ghcr.io/advplyr/audiobookshelf",
+        "ghcr.io/autobrr/qui",
         "ghcr.io/coder/code-server",
         "ghcr.io/home-operations/plex",
-        "ghcr.io/home-operations/qbittorrent",
         "ghcr.io/itzg/minecraft-server",
+        "ghcr.io/mogenius/helm-charts/renovate-operator",
+        "ghcr.io/seerr-team/seerr",
+        "ghcr.io/unpoller/unpoller",
         "ghcr.io/zwave-js/zwave-js-ui",
-        "nodered/node-red",
+        "itzg/mc-router",
       ],
+    },
+    {
+      description: "Auto-merge silo builds - daily, after the gated review passes",
+      matchDatasources: ["docker"],
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: false,
+      schedule: ["after 1am and before 5am"],
+      matchUpdateTypes: ["major", "minor", "patch"],
+      matchPackageNames: ["ghcr.io/silo-server/silo-server"],
     },
     {
       description: "Auto-merge trusted containers - weekly",
@@ -46,7 +84,34 @@
       matchUpdateTypes: ["minor", "patch"],
       matchPackageNames: [
         "ghcr.io/home-operations/prowlarr",
-        "ghcr.io/home-operations/readarr"
+        "ghcr.io/renovatebot/renovate"
+      ],
+    },
+    {
+      description: "Auto-merge leaf-app patch releases only - daily",
+      matchDatasources: ["docker"],
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: false,
+      schedule: ["after 1am and before 5am"],
+      matchUpdateTypes: ["patch"],
+      matchPackageNames: [
+        "docker.io/sirjmann92/mousetrap",
+        "ghcr.io/calibrain/shelfmark-lite",
+        "ghcr.io/home-operations/echo",
+      ],
+    },
+    {
+      // Node-upgrade operator: patch only, minor stays gated for human sign-off
+      description: "Auto-merge tuppr patch releases only - daily",
+      matchDatasources: ["docker", "helm"],
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: false,
+      schedule: ["after 1am and before 5am"],
+      matchUpdateTypes: ["patch"],
+      matchPackageNames: [
+        "ghcr.io/home-operations/charts/tuppr",
       ],
     },
     {
@@ -77,7 +142,14 @@
       automergeType: "pr",
       matchUpdateTypes: ["minor", "patch", "digest"],
       minimumReleaseAge: "3 days",
-      ignoreTests: true,
+      ignoreTests: false,
+    },
+    {
+      description: "qbittorrent: minor and major stay manual",
+      matchDatasources: ["docker"],
+      matchPackageNames: ["ghcr.io/home-operations/qbittorrent"],
+      matchUpdateTypes: ["minor", "major"],
+      automerge: false,
     },
   ],
 }

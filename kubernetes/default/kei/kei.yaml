@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -25,15 +25,20 @@ spec:
       config:
         data:
           config.toml: |
-            log_level = "info"
+            log_level = "debug"
 
             [download]
             directory = "/photos"
+            # {library} keeps PrimarySync/SharedSync in separate trees so cross-library dupes don't collide+bloat (kei #559)
+            folder_structure = "{library}/%Y/%m/%d"
 
             [filters]
-            libraries = ["primary"]
+            libraries = ["all"]
             albums = ["none"]
-            recent = "30d"
+
+            [photos]
+            # name-id7 gives every file a deterministic per-asset id7 stem so re-syncs reconstruct the same path and match existing files; name-size-dedup re-downloads recurring shared-library assets under new suffixes each cycle (kei #546), bloating /photos and self-colliding on content-hash .kei-tmp files
+            file_match_policy = "name-id7"
 
             [watch]
             interval = 3600
@@ -75,13 +80,30 @@ spec:
               -H "Content-Type: application/json" \
               -d "{\"content\": \"**kei** [\`$KEI_EVENT\`]: $KEI_MESSAGE (\`$KEI_ICLOUD_USERNAME\`)\"}"
 
+    externalSecrets:
+      kei:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: kei-secret
+          template:
+            data:
+              ICLOUD_USERNAME: "{{ .ICLOUD_USERNAME }}"
+              ICLOUD_PASSWORD: "{{ .ICLOUD_PASSWORD }}"
+              DISCORD_WEBHOOK_URL: "{{ .DISCORD_WEBHOOK_URL }}"
+        dataFrom:
+          - extract:
+              key: icloudpd
+
     controllers:
       kei:
         containers:
           app:
             image:
               repository: ghcr.io/rhoopr/kei
-              tag: 0.20.0@sha256:89a927e832f3f4a3948e5f7b61ffe5cd9be9b715656500ae03c5dd415314b29d
+              # pinned below 0.23.0: asset-only delta hydration stalls the PrimarySync checkpoint on 0.23.x and 0.24.0 (rhoopr/kei#719, #765; see .renovate/allowedVersions.json5)
+              tag: 0.22.12@sha256:339e58307ad7ae51fdef0fa2aae5681014d6b67d6c6cc3d5097415df943aaa6b
             args:
               - service
               - run
@@ -91,14 +113,29 @@ spec:
               TZ: America/New_York
               KEI_DATA_DIR: /config
             probes:
+              # kei 0.22.9+: /healthz returns 200 before the first sync cycle (only 503 for
+              # genuine staleness/failure once health is established), so httpGet is safe here
+              # and the pod becomes Ready quickly on a healthy boot.
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /healthz
+                    port: 9090
+                  periodSeconds: 10
+                  failureThreshold: 30
+              # /healthz returns 503 when last_success_at > watch_interval*2 (2h) or
+              # consecutive_failures >= 5; restarts ~3min after that, auto-recovering stalls.
               liveness:
                 enabled: true
                 custom: true
                 spec:
-                  tcpSocket:
+                  httpGet:
+                    path: /healthz
                     port: 9090
                   initialDelaySeconds: 30
-                  periodSeconds: 30
+                  periodSeconds: 60
                   failureThreshold: 3
               readiness:
                 enabled: true
@@ -147,9 +184,7 @@ spec:
         globalMounts:
           - path: /photos
       config:
-        storageClass: ceph-block
-        accessMode: ReadWriteOnce
-        size: 1Gi
+        existingClaim: kei-config
         globalMounts:
           - path: /config
       kei-config:

@@ -7,12 +7,12 @@ GitOps Kubernetes cluster on Talos + FluxCD. Infrastructure (`/setup`) separate 
 ## Key Commands
 
 ```bash
-task                    # List all tasks
-task k8s:sync-secrets   # Force sync ExternalSecrets
-task k8s:cleanse-pods   # Delete Failed/Pending/Succeeded pods
-task volsync:snapshot APP=<name>  # Trigger immediate backup
-task volsync:list                 # List ReplicationSources/Destinations
-task volsync:restore APP=<name>   # Restore an app's PVC from latest backup
+just                        # List all recipes
+just k8s sync-secrets       # Force sync ExternalSecrets
+just k8s cleanse-pods       # Delete Failed/Pending/Succeeded pods
+just kopiur snapshot <app>  # Trigger immediate backup
+just kopiur list <app>      # List snapshots for an app
+just kopiur restore <app>   # Restore an app's PVC from latest backup
 flux reconcile kustomization cluster-apps --with-source
 ```
 
@@ -43,143 +43,38 @@ tool that creates, updates, deletes, scales, execs, or pushes requires explicit 
 
 ## Architecture
 
-**Directory Structure**:
-- `/setup/` - Talos config, FluxCD setup, OCI repositories
-- `/kubernetes/{namespace}/{app}/` - Application manifests
-
-**Namespaces**: cert-manager, default, flux-system, kube-system, monitoring, rook-ceph, system-upgrade
-
 **Patterns**:
 - **Cluster**: Single homelab cluster, 1 control plane + 7 workers (Talos)
-- **Primary**: OCIRepository + chartRef (exceptions: minecraft and emqx-operator use HelmRepository)
+- **Primary**: OCIRepository + chartRef (exceptions: minecraft uses HelmRepository)
 - **Ingress**: Envoy Gateway with HTTPRoute (NOT Traefik/Ingress)
 - **Gateways**: `internal` (LAN + Tailscale, 10.0.6.151) and `public` (internet-facing, 10.0.6.150), both in `kube-system`
-- **Storage**: Ceph block (default), NFS media mounts, VolSync+Kopia backups
+- **Storage**: Ceph block (default), NFS media mounts, kopiur+Kopia backups
 - **Secrets**: ExternalSecret CRDs only (no plaintext)
-- **Backups**: ResourceSet automation in kube-system/volsync/
-- **CI**: PRs run `flux-local` diff/test (`.github/workflows/flux-local.yaml`); Renovate auto-bumps images per `.renovate/` rules
+- **Backups**: ResourceSet automation in kube-system/kopiur/ (Kopia-native backup operator)
+- **Sync**: Flux reacts to pushes to `master` immediately via a webhook receiver — no need to wait out the `interval` or manually run `flux reconcile` after pushing; reconciliation typically starts within seconds.
+- **CI**: PRs run `flate` diff/test (`.forgejo/workflows/flate.yaml`); Renovate auto-bumps images per `.renovate/` rules (config at `renovate.json5`); non-trivial Renovate version bumps are gated by a Claude review (`.forgejo/workflows/renovate-review.yaml`, `claude/renovate-review` status — digest/github-action/grafana-dashboard updates are ungated)
 - **Grafana**: Managed by grafana-operator (`kubernetes/monitoring/grafana/`). Dashboards, folders, and datasources are `GrafanaDashboard`/`GrafanaFolder`/`GrafanaDatasource` CRs (`grafana.integreatly.org/v1beta1`). Instance selector label is `dashboards: grafana`. To add a dashboard, create a `GrafanaDashboard` CR next to the relevant app with `instanceSelector: {matchLabels: {dashboards: grafana}}`; add `allowCrossNamespaceImport: true` and a `folderRef` when outside the `monitoring` namespace. grafana.com dashboards use `spec.url`, chart-shipped ConfigMap dashboards use `spec.configMapRef`. Renovate tracks grafana.com revision URLs automatically via `.renovate/grafanaDashboards.json5`.
 
-## Application Template
+## Scaffolding a New App
 
-```yaml
----
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
-apiVersion: helm.toolkit.fluxcd.io/v2
-kind: HelmRelease
-metadata:
-  name: &app app-name
-  namespace: target-namespace
-spec:
-  chartRef:
-    kind: OCIRepository
-    name: app-template
-    namespace: flux-system
-  interval: 1h
-  values:
-    defaultPodOptions:
-      securityContext:
-        fsGroup: 1001
-        fsGroupChangePolicy: OnRootMismatch
-        runAsGroup: 1001
-        runAsNonRoot: true
-        runAsUser: 1001  # Check image docs; common values: 1001, 1000, 65534
-
-    controllers:
-      app-name:
-        containers:
-          app:
-            image:
-              repository: ghcr.io/org/image
-              tag: 1.0.0@sha256:...  # Always pin SHA
-            resources:
-              requests:
-                cpu: 10m
-                memory: 128Mi
-              limits:
-                memory: 512Mi
-            securityContext:
-              allowPrivilegeEscalation: false
-              capabilities: {drop: ["ALL"]}
-              readOnlyRootFilesystem: true
-
-    persistence:
-      config:
-        existingClaim: app-name-config
-
-    route:
-      app:
-        parentRefs:
-          - name: internal          # LAN/Tailscale only
-            namespace: kube-system
-          # - name: public          # Add for internet-facing apps
-          #   namespace: kube-system
-        hostnames:
-          - "app.eviljungle.com"
-        rules:
-          - matches:
-              - path: {type: PathPrefix, value: /}
-            backendRefs:
-              - name: app-name
-                port: http
-
-    service:
-      app:
-        controller: app-name
-        ports:
-          http:
-            port: 8080
-```
-
-## Non-App-Template HelmReleases
-
-For infrastructure charts (not using app-template), use this schema:
-```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
-```
-
-## ExternalSecret Template
-
-```yaml
----
-# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/external-secrets.io/externalsecret_v1.json
-apiVersion: external-secrets.io/v1
-kind: ExternalSecret
-metadata:
-  name: app-name-secret
-spec:
-  secretStoreRef:
-    kind: ClusterSecretStore
-    name: onepassword-connect
-  target:
-    name: app-name-secret
-    template:
-      engineVersion: v2
-      data:
-        API_KEY: "{{ .api_key }}"
-  dataFrom:
-    - extract:
-        key: app-name
-```
+The HelmRelease, ExternalSecret, and kopiur backup-registration templates (including the
+`kubernetes/kube-system/kopiur/resourceset-inputprovider.yaml` entry format) live in the
+`new-app` skill (`.claude/skills/new-app/SKILL.md`) — invoke it when adding a new app rather
+than reproducing the YAML here.
 
 ## Backup Configuration
 
-Add to `kubernetes/kube-system/volsync/resourceset-inputprovider.yaml`:
+Schedules use kopiur's Jenkins-style `H` cron substitution (`H * * * *`) —
+each app hashes to a stable, deterministic minute so load self-distributes
+with no manual bucket bookkeeping. kopiur only hashes a bare `H` token (no
+`H/N` step syntax — the admission webhook rejects it), so trim low-churn
+apps with plain cron step syntax in the hour field, `H */4 * * *` (every 4h),
+instead of hourly.
 
-```yaml
-apps:
-  - app: app-name
-    namespace: "default"   # omit if default
-    runAsUser: "1001"      # omit to use default
-    capacity: 1Gi          # omit to use default (1Gi)
-    schedule: "0 4 * * *"  # omit to use default (0 * * * *, hourly)
-    pvcSuffix: "config"    # omit to use default (config)
-    cacheCapacity: 20Gi    # omit unless app needs large Kopia cache (e.g. plex)
-```
-
-**Schedule groups** (see `resourceset-inputprovider.yaml` header): pick `:00` (Group A, fast), `:15` (Group B, medium), or `:30` (Group C, heavy) when adding an app to spread NFS/Ceph load.
-
-NFS repository (`nas.home:/mnt/ssdtank/kopia`) is configured via `moverVolumes` directly on each `ReplicationSource`/`ReplicationDestination`/`KopiaMaintenance` resource — no webhook injection.
+NFS repository (`nas.home:/mnt/ssdtank/kopia`) is configured on the single
+`ClusterRepository "nas"` in `clusterrepository.yaml` — apps reference it by
+name (`repository: {kind: ClusterRepository, name: nas}`), no per-app
+volume/secret wiring needed.
 
 ## app-template ConfigMap Naming
 
@@ -210,25 +105,23 @@ persistence:
     # name: gatus-config  # WRONG: do not append the configMap key
 ```
 
+## app-template ExternalSecrets
+
+App-template 5.2+ (common library 5.2+) renders `ExternalSecret` objects natively from
+`values.externalSecrets` — prefer this over a standalone `ExternalSecret` manifest for any
+app already on the `app-template` chartRef (see the `new-app` skill for the template).
+`target.name` is what other fields (`envFrom.secretRef.name`, `persistence.*.name`) actually
+reference, so set it explicitly; it does not follow the ConfigMap naming convention above.
+The generated object's own name does follow that convention though — a single
+`externalSecrets` entry is named after the release, multiple entries become
+`<release>-<identifier>`, so keep identifiers short (e.g. `main`, `gcp-sa`) to avoid a
+doubled `<release>-<release>-...` name.
+
 ## Troubleshooting
 
-**Stuck HelmRelease**: When a HelmRelease exhausts its upgrade retries (e.g. due to image pull failures or timeout), scale the deployment to 0 to unblock it, then force reconciliation:
-```bash
-kubectl scale deployment app-name --replicas=0 -n namespace
-flux reconcile helmrelease app-name -n namespace --with-source
-# Flux will scale it back up automatically on success
-```
+Recovering a stuck HelmRelease, forcing an ExternalSecret resync, or unblocking a Flux
+reconcile: see the `flux-recovery` skill (`.claude/skills/flux-recovery/SKILL.md`).
 
-**Force ExternalSecret resync**: Bypass the secretStore cache when a 1Password value changed but the ExternalSecret hasn't picked it up:
-```bash
-kubectl annotate externalsecret <name> -n <ns> force-sync=$(date +%s) --overwrite
-```
-
-**HelmRelease upgrade recovery**: Before reconciling an upgrade, check for stuck pods from the prior revision and scale the workload to 0 if needed. If a HelmRelease is stuck, prefer `helm rollback` or suspend/resume the HR over retrying reconciliation:
-```bash
-flux suspend helmrelease app-name -n namespace
-flux resume helmrelease app-name -n namespace
-```
 ## Standards
 
 - **Images**: Always pin with SHA256 digest

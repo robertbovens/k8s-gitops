@@ -1,0 +1,106 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ser2net
+  namespace: default
+spec:
+  chartRef:
+    kind: OCIRepository
+    name: app-template
+    namespace: flux-system
+  interval: 1h
+  values:
+    defaultPodOptions:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nutech.feature.node.kubernetes.io/alarmdecoder
+                    operator: In
+                    values:
+                      - "true"
+
+    configMaps:
+      config:
+        data:
+          # bridges the NuTech AlarmDecoder (FTDI FT230X, /dev/ttyUSB0) to Home Assistant
+          # over raw TCP; max-connections mirrors ser2sock's multi-client fan-out
+          ser2net.yaml: |
+            connection: &alarmdecoder
+              accepter: tcp,10000
+              connector: serialdev,/dev/ttyUSB0,115200n81,local
+              options:
+                max-connections: 4
+
+    controllers:
+      ser2net:
+        containers:
+          app:
+            image:
+              repository: ghcr.io/jippi/docker-ser2net
+              tag: 4.6.8@sha256:349ebeade8ed0ad0d2b97b7002576adbf1f9b101c248ee1cbc1b2a8f617ec4da
+            env:
+              TZ: America/New_York
+            probes:
+              liveness: &probes
+                enabled: true
+                custom: true
+                spec:
+                  tcpSocket:
+                    port: 10000
+                  initialDelaySeconds: 10
+                  periodSeconds: 60
+                  timeoutSeconds: 3
+                  failureThreshold: 3
+              readiness: *probes
+            resources:
+              requests:
+                cpu: 15m
+                memory: 50Mi
+              limits:
+                memory: 250Mi
+                generic-device-plugin/alarmdecoder: 1
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: { drop: ["ALL"] }
+
+    persistence:
+      config:
+        type: configMap
+        identifier: config
+        globalMounts:
+          - path: /etc/ser2net/ser2net.yaml
+            subPath: ser2net.yaml
+            readOnly: true
+      var-lock:
+        # ser2net writes a device lock file here; without a writable mount it fails to
+        # lock /dev/ttyUSB0 under readOnlyRootFilesystem and resets client connections
+        type: emptyDir
+        globalMounts:
+          - path: /var/lock
+
+    service:
+      app:
+        forceRename: ser2net
+        controller: ser2net
+        primary: true
+        ports:
+          server:
+            port: 10000
+            primary: true
+            protocol: TCP
+      compat:
+        # kept so Home Assistant's AlarmDecoder integration (host ser2sock:10000) needs no change
+        forceRename: ser2sock
+        controller: ser2net
+        ports:
+          server:
+            port: 10000
+            protocol: TCP

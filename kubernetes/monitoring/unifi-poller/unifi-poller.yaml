@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -21,6 +21,21 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      unifi-poller:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: unifi-poller-secret
+          template:
+            data:
+              UP_UNIFI_DEFAULT_USER: "{{ .UP_UNIFI_DEFAULT_USER }}"
+              UP_UNIFI_DEFAULT_PASS: "{{ .UP_UNIFI_DEFAULT_PASS }}"
+        dataFrom:
+          - extract:
+              key: unifi-poller
+
     controllers:
       unifi-poller:
         annotations:
@@ -29,7 +44,7 @@ spec:
           app:
             image:
               repository: ghcr.io/unpoller/unpoller
-              tag: v3.2.0@sha256:bf7bdcc59fcdaa4699687007aa3ec24ddb3c9d9521f392d8c7aa2bea1bdb781a
+              tag: v5.9.6@sha256:96c2c7645bce1ed6f43934b11584dfa378a170e262aba78972c18aec6cbc0e16
             env:
               TZ: America/New_York
               UP_INFLUXDB_DISABLE: "true"

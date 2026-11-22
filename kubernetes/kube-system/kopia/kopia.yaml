@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -20,6 +20,20 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
 
+    externalSecrets:
+      kopia:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: kopia-secret
+          template:
+            data:
+              KOPIA_PASSWORD: '{{ .KOPIA_PASSWORD }}'
+        dataFrom:
+          - extract:
+              key: kopia
+
     configMaps:
       config:
         data:
@@ -31,9 +45,9 @@ spec:
                   "path": "/repository"
                 }
               },
-              "hostname": "volsync",
-              "username": "volsync",
-              "description": "volsync",
+              "hostname": "kopia-ui",
+              "username": "kopia-ui",
+              "description": "kopia-ui",
               "enableActions": false
             }
 
@@ -45,7 +59,7 @@ spec:
           app:
             image:
               repository: ghcr.io/home-operations/kopia
-              tag: 0.23.0@sha256:76865b421548b1d7bb26a8268f0f0bc828be4eec3f8d8b9c8ece991c99878f94
+              tag: 0.23.1@sha256:6025a14d5a673bc38de3efdf48711ee93f0130787798b677c85ca95d4eaa0f7a
             args:
               - --without-password
             env:
@@ -71,8 +85,12 @@ spec:
             resources:
               requests:
                 cpu: 10m
+                # was request-less (no memory floor), a top eviction target;
+                # limit raised from 1Gi after repeat OOMKills despite a
+                # modest 734Mi observed peak
+                memory: 256Mi
               limits:
-                memory: 1Gi
+                memory: 2Gi
             securityContext:
               allowPrivilegeEscalation: false
               capabilities:
@@ -106,9 +124,6 @@ spec:
 
     route:
       app:
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

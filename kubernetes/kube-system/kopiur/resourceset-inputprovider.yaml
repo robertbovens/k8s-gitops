@@ -1,0 +1,138 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/controlplaneio-fluxcd/flux-operator/main/config/crd/bases/fluxcd.controlplane.io_resourcesetinputproviders.yaml
+# Consolidated ResourceSetInputProvider for all kopiur backup/restore configurations.
+# Fields with defaults (can be omitted if value matches):
+#   - pvcSuffix: "config" (PVC name will be <app>-<pvcSuffix>)
+#   - runAsUser: "1001"
+#   - capacity: "1Gi"
+#   - cacheCapacity: "3Gi" (1Gi is too small: kopia's cache+log budget on the
+#     shared repo's index alone runs ~2Gi steady state regardless of app size)
+#   - schedule: "H 3 * * *"
+#
+# Frequency: daily ("H 3 * * *") for most apps; sonarr, radarr, zwave2mqtt and
+# unifi run every 12h ("H */12 * * *"). kopiur only hashes a bare "H" token
+# (no "H/N" step syntax; the admission webhook rejects it), so the hashed slot
+# is minute-only and the hour field uses plain cron syntax.
+# To add a new app: add entry to the apps array below
+# To remove an app: delete entry from the apps array below
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSetInputProvider
+metadata:
+  name: kopiur-apps
+  namespace: kube-system
+spec:
+  type: Static
+  defaultValues:
+    defaults:
+      runAsUser: "1001"
+      capacity: "1Gi"
+      cacheCapacity: "3Gi"
+      schedule: "H 3 * * *"
+      pvcSuffix: "config"
+    apps:
+      - app: audiobookshelf
+        schedule: "H 3 * * *"
+
+      - app: continuwuity
+        capacity: 5Gi
+        schedule: "H 3 * * *"
+
+      - app: forgejo
+        runAsUser: "1000"
+        capacity: 10Gi
+        schedule: "H 3 * * *"
+
+      - app: frigate
+        runAsUser: "1000"
+        schedule: "H 3 * * *"
+
+      - app: gatus
+        namespace: "monitoring"
+        runAsUser: "1000"
+        schedule: "H 3 * * *"
+
+      - app: home-assistant
+        runAsUser: "1000"
+        capacity: 10Gi
+        schedule: "H 3 * * *"
+
+      - app: kei
+        schedule: "H 3 * * *"
+
+      - app: minecraft-creative
+        pvcSuffix: "datadir"
+        runAsUser: "1000"
+        capacity: 10Gi
+        schedule: "H 3 * * *"
+
+      - app: minecraft-survival
+        pvcSuffix: "datadir"
+        runAsUser: "1000"
+        capacity: 8Gi
+        cacheCapacity: 10Gi
+        schedule: "H 3 * * *"
+
+      - app: minecraft-survival2
+        pvcSuffix: "datadir"
+        runAsUser: "1000"
+        capacity: 20Gi
+        cacheCapacity: 12Gi
+        schedule: "H 3 * * *"
+
+      - app: mousetrap
+        runAsUser: "1000"
+        schedule: "H 3 * * *"
+
+      - app: plex
+        runAsUser: "1000"
+        capacity: 35Gi
+        cacheCapacity: 20Gi
+        schedule: "H 3 * * *"
+
+      - app: prowlarr
+        schedule: "H 3 * * *"
+
+      - app: qbittorrent
+        schedule: "H 3 * * *"
+
+      - app: qui
+        schedule: "H 3 * * *"
+
+      - app: radarr
+        capacity: 3Gi
+        schedule: "H */12 * * *"
+
+      - app: recyclarr
+        capacity: 5Gi
+        schedule: "H 3 * * *"
+
+      - app: sabnzbd
+        schedule: "H 3 * * *"
+
+      - app: seerr
+        schedule: "H 3 * * *"
+
+      - app: shelfmark
+        schedule: "H 3 * * *"
+
+      - app: silo
+        runAsUser: "1000"
+        capacity: 20Gi
+        schedule: "H 3 * * *"
+
+      - app: sonarr
+        capacity: 2Gi
+        schedule: "H */12 * * *"
+
+      - app: tautulli
+        schedule: "H 3 * * *"
+
+      - app: unifi
+        pvcSuffix: "data"
+        runAsUser: "999"
+        capacity: 2Gi
+        schedule: "H */12 * * *"
+
+      - app: zwave2mqtt
+        runAsUser: "1000"
+        schedule: "H */12 * * *"

@@ -11,7 +11,7 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    tag: 0.12.5
+    tag: 0.13.13
   url: oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-single
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
@@ -39,23 +39,12 @@ spec:
         enabled: true
       route:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system
             sectionName: https
         hostnames:
           - vlogs.eviljungle.com
-        rules:
-          - matches:
-              - path:
-                  type: PathPrefix
-                  value: /
-            backendRefs:
-              - name: victoria-logs-server
-                port: 9428
     dashboards:
       enabled: false
       grafanaOperator:

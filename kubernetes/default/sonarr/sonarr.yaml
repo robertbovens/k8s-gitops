@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -22,13 +22,27 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      sonarr:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: sonarr-secret
+        data:
+          - secretKey: api_key
+            remoteRef:
+              key: sonarr
+              property: api_key
+
     controllers:
       sonarr:
         containers:
           app:
             image:
               repository: ghcr.io/home-operations/sonarr
-              tag: 4.0.17.2967@sha256:4ff5667a371e08b098858fa2457a99a5fef5f6a32640eb8567efe979d13ac9fc
+              tag: 5.0.0.2997@sha256:05acf764e72fa458b5edf236771d7a08d1f120fce509d4fb8a4e799fae29fda7
             env:
               SONARR__APP__INSTANCENAME: sonarr
               SONARR__APPLICATION_URL: 'https://shows.eviljungle.com'
@@ -82,9 +96,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

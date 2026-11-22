@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -20,13 +20,28 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
 
+    externalSecrets:
+      continuwuity:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: continuwuity-secret
+          template:
+            data:
+              CONDUWUIT_REGISTRATION_TOKEN: "{{ .registration_token }}"
+        dataFrom:
+          - extract:
+              key: continuwuity
+
     controllers:
       continuwuity:
         containers:
           app:
             image:
-              repository: forgejo.ellis.link/continuwuation/continuwuity
-              tag: v0.5.9-maxperf@sha256:674f59c5c6c72a7ca08f01f09143761b0111127752a0f69607e3bed8ca9b4216
+              repository: ghcr.io/continuwuity/continuwuity
+              tag: v26.9.4-maxperf@sha256:b8d9739c84028382194f766edddc3c71a90e111f36d829ede02c9fbad3c576a2
             env:
               TZ: "America/New_York"
               CONDUWUIT_SERVER_NAME: eviljungle.com
@@ -98,8 +113,6 @@ spec:
 
     route:
       app:
-        annotations:
-          external-dns.alpha.kubernetes.io/external: "true"
         parentRefs:
           - name: public
             namespace: kube-system
@@ -107,8 +120,6 @@ spec:
         hostnames:
           - &host matrix.eviljungle.com
       internal:
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
         parentRefs:
           - name: internal
             namespace: kube-system
@@ -117,7 +128,6 @@ spec:
           - *host
       well-known:
         annotations:
-          external-dns.alpha.kubernetes.io/external: "true"
           gatus.home-operations.com/endpoint: |-
             url: https://eviljungle.com/.well-known/matrix/client
         parentRefs:

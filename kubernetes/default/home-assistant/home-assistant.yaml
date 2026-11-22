@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -12,9 +12,72 @@ spec:
     namespace: flux-system
   interval: 1h
   values:
+    externalSecrets:
+      main:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: home-assistant-secret
+          template:
+            data:
+              # Home Assistant
+              HASS_TOKEN: "{{ .HASS_TOKEN }}"
+              LATITUDE: "{{ .LATITUDE }}"
+              LONGITUDE: "{{ .LONGITUDE }}"
+              WORK_LATITUDE: "{{ .WORK_LATITUDE }}"
+              WORK_LONGITUDE: "{{ .WORK_LONGITUDE }}"
+              SSC_LATITUDE: "{{ .SSC_LATITUDE }}"
+              SSC_LONGITUDE: "{{ .SSC_LONGITUDE }}"
+              JENS_WORK_LATITUDE: "{{ .JENS_WORK_LATITUDE }}"
+              JENS_WORK_LONGITUDE: "{{ .JENS_WORK_LONGITUDE }}"
+              ALARMCD: "{{ .ALARMCD }}"
+              SECURE_DEVICES_PIN: "{{ .SECURE_DEVICES_PIN }}"
+              OPNSENSE_USER: "{{ .OPNSENSE_USER }}"
+              OPNSENSE_KEY: "{{ .OPNSENSE_KEY }}"
+        dataFrom:
+          - extract:
+              key: home-assistant
+      gcp-sa:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: home-assistant-gcp-sa-secret
+        data:
+          - secretKey: home-assistant-7c48d-e078848c9fb0.json
+            remoteRef:
+              key: home-assistant-gcp-sa
+              property: home-assistant-7c48d-e078848c9fb0.json
+      code-server:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: home-assistant-code-server-secret
+        data:
+          - secretKey: HASHED_PASSWORD
+            remoteRef:
+              key: home-assistant
+              property: code-server-hashed-password
+      git:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: home-assistant-git-secret
+        data:
+          - secretKey: deploy-key
+            remoteRef:
+              key: home-assistant-git-key
+              property: private key
+
     controllers:
       home-assistant:
+        strategy: Recreate
         pod:
+          hostNetwork: true
+          dnsPolicy: ClusterFirstWithHostNet
           securityContext:
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch
@@ -28,7 +91,7 @@ spec:
           app:
             image:
               repository: ghcr.io/home-operations/home-assistant
-              tag: 2026.5.4@sha256:42d1bc5e99ed0ae8f49b72b8994e25e1a6b0f1467ba26c1b959f54ca42541ffd
+              tag: &hass-image 2026.11.2@sha256:28ae630554f1f2dd43ecbdecad9d974f09f02b17a0a769a290ceec094ec427dc
             env:
               TZ: "America/New_York"
             envFrom:
@@ -62,10 +125,10 @@ spec:
           code-server:
             image:
               repository: ghcr.io/coder/code-server
-              tag: 4.121.0@sha256:ea5f42d99998e2ba44297eca9b8a38a101e718ef54caaa41d649f6c6f1c8c71e
+              tag: 4.146.0@sha256:fc708b18f6c613b5a9d00f1d1801e58376d3df9c5b5de77f5c02d67b711f99c9
             args:
               - --auth
-              - none
+              - password
               - --disable-telemetry
               - --disable-update-check
               - --user-data-dir
@@ -78,11 +141,61 @@ spec:
             env:
               HASS_SERVER: http://localhost:8123
               TZ: America/New_York
+              HASHED_PASSWORD:
+                valueFrom:
+                  secretKeyRef:
+                    name: home-assistant-code-server-secret
+                    key: HASHED_PASSWORD
             resources:
               requests:
                 cpu: 10m
+                memory: 256Mi
               limits:
-                memory: 1Gi
+                memory: 2Gi
+
+        initContainers:
+          git-ssh-setup:
+            image:
+              repository: ghcr.io/coder/code-server
+              tag: 4.146.0@sha256:fc708b18f6c613b5a9d00f1d1801e58376d3df9c5b5de77f5c02d67b711f99c9
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                set -eu
+                install -d -m 700 /home/coder/.ssh
+                printf '%s\n' "$(cat /secrets/git/deploy-key)" > /home/coder/.ssh/id_ed25519
+                chmod 600 /home/coder/.ssh/id_ed25519
+                echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > /home/coder/.ssh/known_hosts
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
+          venv-reset:
+            image:
+              repository: ghcr.io/home-operations/home-assistant
+              tag: *hass-image
+            command: ["/bin/bash", "-c"]
+            args:
+              - |
+                set -eu
+                marker=/config/.hass-image-version
+                current="$(python3 -c 'from homeassistant.const import __version__; print(__version__)')"
+                previous="$(cat "$marker" 2>/dev/null || true)"
+                if [ "$current" != "$previous" ]; then
+                  echo "HA image changed ($previous -> $current); wiping /config/.venv"
+                  rm -rf /config/.venv/* /config/.venv/.[!.]* 2>/dev/null || true
+                  printf '%s' "$current" > "$marker"
+                else
+                  echo "HA image unchanged ($current); keeping /config/.venv cache"
+                fi
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              readOnlyRootFilesystem: true
 
     persistence:
       config:
@@ -93,6 +206,21 @@ spec:
               - path: /config
             code-server:
               - path: /config
+              - path: /home/coder
+                subPath: code-server-home
+            venv-reset:
+              - path: /config
+            git-ssh-setup:
+              - path: /home/coder
+                subPath: code-server-home
+      git-secret:
+        type: secret
+        name: home-assistant-git-secret
+        advancedMounts:
+          home-assistant:
+            git-ssh-setup:
+              - path: /secrets/git
+                readOnly: true
       hass-cache:
         storageClass: "ceph-block"
         accessMode: ReadWriteOnce
@@ -100,6 +228,9 @@ spec:
         advancedMounts:
           home-assistant:
             app:
+              - path: /config/.venv
+                subPath: hass-venv
+            venv-reset:
               - path: /config/.venv
                 subPath: hass-venv
       tmpfs:
@@ -131,8 +262,6 @@ spec:
 
     route:
       app:
-        annotations:
-          external-dns.alpha.kubernetes.io/external: "true"
         parentRefs:
           - name: public
             namespace: kube-system
@@ -144,8 +273,6 @@ spec:
               - identifier: gateway
                 port: 8123
       internal:
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
         parentRefs:
           - name: internal
             namespace: kube-system
@@ -158,9 +285,6 @@ spec:
                 port: 8123
       code:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

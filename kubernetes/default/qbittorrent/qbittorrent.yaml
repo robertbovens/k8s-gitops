@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -22,13 +22,31 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      qbittorrent:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: qbittorrent-secret
+          template:
+            data:
+              DISCORD_WEBHOOK_URL: "{{ .DISCORD_WEBHOOK_URL }}"
+              PLEX_TOKEN: "{{ .PLEX_TOKEN }}"
+              AUDIOBOOKSHELF_TOKEN: "{{ .AUDIOBOOKSHELF_TOKEN }}"
+              AUDIOBOOKSHELF_LIBRARY_ID: "{{ .AUDIOBOOKSHELF_LIBRARY_ID }}"
+        dataFrom:
+          - extract:
+              key: qbittorrent
+
     controllers:
       qbittorrent:
         containers:
           app:
             image:
               repository: ghcr.io/home-operations/qbittorrent
-              tag: 5.2.0@sha256:788796013c3da75f2dba568c5319975a5c41f555586dfd13987be4631181e00e
+              tag: 5.2.4@sha256:9307627e03981d5473aa31175ea76ed56ea3752333ca49d601b6af45e281e7ba
             env:
               TZ: America/New_York
               QBT_WEBUI_PORT: &port 80
@@ -49,10 +67,11 @@ spec:
             resources:
               requests:
                 cpu: 10m
-                memory: 250Mi
+                memory: 512Mi
                 ephemeral-storage: 5Gi
               limits:
-                memory: 2Gi
+                # raised from 2Gi - 30d peak was 2020Mi, essentially pinned at limit
+                memory: 3Gi
             securityContext:
               allowPrivilegeEscalation: false
               capabilities: {drop: ["ALL"]}
@@ -87,9 +106,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

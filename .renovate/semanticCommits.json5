@@ -28,6 +28,12 @@
       commitMessageTopic: "image {{depName}}",
     },
     {
+      description: "OCI Helm charts",
+      matchDepTypes: ["HelmChart"],
+      semanticCommitScope: "helm",
+      commitMessageTopic: "chart {{depName}}",
+    },
+    {
       matchDatasources: ["helm"],
       semanticCommitScope: "helm",
       commitMessageTopic: "chart {{depName}}",

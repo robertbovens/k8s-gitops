@@ -69,21 +69,36 @@ spec:
         summary: "Host out of inodes (instance {{ $labels.instance }})"
         description: "Disk is almost running out of available inodes (< 10% left)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
     - alert: HostUnusualDiskReadLatency
-      expr: rate(node_disk_read_time_seconds_total[1m]) / rate(node_disk_reads_completed_total[1m]) > 100
+      # physical disks only (nvme*/sd*) with a min-IOPS guard - rbd/zd virtual devices
+      # produce meaningless averages (or +Inf) at near-zero IOPS and false-positive
+      expr: |
+        (
+          rate(node_disk_read_time_seconds_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m])
+          / rate(node_disk_reads_completed_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m])
+        ) > 0.25
+        and rate(node_disk_reads_completed_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m]) > 10
       for: 5m
       labels:
         severity: warning
       annotations:
         summary: "Host unusual disk read latency (instance {{ $labels.instance }})"
-        description: "Disk latency is growing (read operations > 100ms)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+        description: "Disk latency is growing (read operations > 250ms)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
     - alert: HostUnusualDiskWriteLatency
-      expr: rate(node_disk_write_time_seconds_total[1m]) / rate(node_disk_writes_completed_total[1m]) > 100
+      # physical disks only (nvme*/sd*) with a min-IOPS guard - see rook-ceph mon
+      # quorum-at-risk incident 2026-08-14 (k8s-g nvme0n1 write stall) for why this
+      # alert exists; rbd/zd virtual devices produce meaningless averages at near-zero IOPS
+      expr: |
+        (
+          rate(node_disk_write_time_seconds_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m])
+          / rate(node_disk_writes_completed_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m])
+        ) > 0.25
+        and rate(node_disk_writes_completed_total{device=~"nvme[0-9]+n[0-9]+|sd[a-z]+"}[5m]) > 10
       for: 5m
       labels:
         severity: warning
       annotations:
         summary: "Host unusual disk write latency (instance {{ $labels.instance }})"
-        description: "Disk latency is growing (write operations > 100ms)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+        description: "Disk latency is growing (write operations > 250ms)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
     - alert: HostHighCpuLoad
       expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
       for: 5m
@@ -101,13 +116,21 @@ spec:
         summary: "Host swap is filling up (instance {{ $labels.instance }})"
         description: "Swap is filling up (>80%)\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
     - alert: HostSystemdServiceCrashed
-      expr: node_systemd_unit_state{state="failed"} == 1
+      expr: node_systemd_unit_state{state="failed", name!="nixos-upgrade.service"} == 1
       for: 5m
       labels:
         severity: warning
       annotations:
         summary: "Host SystemD service crashed (instance {{ $labels.instance }})"
         description: "SystemD service crashed\n  VALUE = {{ $value }}\n  LABELS: {{ $labels }}"
+    - alert: HostRebootRequired
+      expr: node_reboot_required == 1
+      for: 30m
+      labels:
+        severity: info
+      annotations:
+        summary: "Host reboot required (instance {{ $labels.instance }})"
+        description: "Booted config differs from current-system (new kernel/initrd/modules). Reboot to apply.\n  LABELS: {{ $labels }}"
     - alert: HostPhysicalComponentTooHot
       expr: (node_hwmon_temp_celsius > 75) unless on(instance) ({__name__=~".+", instance=~"10\\.0\\.7\\.(52|54|55|59):9100"})
       for: 5m

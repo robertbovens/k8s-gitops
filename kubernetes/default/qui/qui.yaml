@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -20,13 +20,27 @@ spec:
         runAsNonRoot: true
         runAsUser: 1001
 
+    externalSecrets:
+      qui:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: qui-secret
+        data:
+          - secretKey: QUI__SESSION_SECRET
+            remoteRef:
+              key: qui
+              property: session_secret
+
     controllers:
       qui:
         containers:
           app:
             image:
               repository: ghcr.io/autobrr/qui
-              tag: v1.19.0@sha256:baa07db5326f75f8c2246703603cbe2132476c8ad0ab31c976a960cb4c4731f5
+              tag: v1.36.0@sha256:ecfd0f508f951f038b590f4fcfd33177d2ce0a8d4d33d86864b0d96e917caf59
             env:
               QUI__HOST: 0.0.0.0
               QUI__PORT: &port 7476
@@ -73,9 +87,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

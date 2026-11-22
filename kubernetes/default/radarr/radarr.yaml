@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -24,13 +24,27 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      radarr:
+        refreshInterval: 5m
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: radarr-secret
+        data:
+          - secretKey: api_key
+            remoteRef:
+              key: radarr
+              property: api_key
+
     controllers:
       radarr:
         containers:
           app:
             image:
               repository: ghcr.io/home-operations/radarr
-              tag: 6.2.0.10390@sha256:be596a2f896fdf15077af027f44500f73e1f6fb7b450a6494b37dd25b7cc5927
+              tag: 7.0.3.10918@sha256:55d3cf8a4c4c531bb8b5c1ba88eb270d4435e01e228fbdb16cdfc910a17e3b06
             env:
               RADARR__APP__INSTANCENAME: Radarr
               RADARR__APPLICATION_URL: 'https://movies.eviljungle.com'
@@ -84,9 +98,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

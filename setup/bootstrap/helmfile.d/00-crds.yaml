@@ -13,68 +13,68 @@ helmDefaults:
     - -c
     - yq ea -e 'select(.kind == "CustomResourceDefinition")'
 
-repositories:
-  - name: emqx
-    url: https://repos.emqx.io/charts
-
 releases:
   - name: prometheus-operator-crds
     namespace: monitoring
     chart: oci://ghcr.io/prometheus-community/charts/prometheus-operator-crds
-    version: 29.0.0
+    version: 33.0.2
 
   - name: external-secrets
     namespace: kube-system
     chart: oci://ghcr.io/external-secrets/charts/external-secrets
-    version: 2.5.0
+    version: 2.15.0
 
-  - name: volsync
+  - name: kopiur
     namespace: kube-system
-    chart: oci://ghcr.io/home-operations/charts-mirror/volsync-perfectra1n
-    version: 0.18.5
+    chart: oci://ghcr.io/home-operations/charts/kopiur
+    version: 0.11.2
 
   - name: rook-ceph
     namespace: rook-ceph
     chart: oci://ghcr.io/rook/rook-ceph
-    version: v1.19.5
+    version: 1.21.2
 
   - name: cloudnative-pg
     namespace: default
     chart: oci://ghcr.io/cloudnative-pg/charts/cloudnative-pg
-    version: 0.28.2
-
-  - name: emqx-operator
-    namespace: default
-    chart: emqx/emqx-operator
-    version: 2.2.29
+    version: 0.29.2
 
   - name: envoy-gateway
     namespace: kube-system
     chart: oci://mirror.gcr.io/envoyproxy/gateway-helm
-    version: v1.8.0
+    version: 1.10.0
 
   - name: node-feature-discovery
     namespace: kube-system
     chart: oci://registry.k8s.io/nfd/charts/node-feature-discovery
-    version: 0.18.3
+    version: 0.20.1
 
   - name: silence-operator
     namespace: monitoring
     chart: oci://gsoci.azurecr.io/charts/giantswarm/silence-operator
-    version: 0.20.1
+    version: 0.22.0
 
   - name: snapshot-controller
     namespace: kube-system
     chart: oci://ghcr.io/piraeusdatastore/helm-charts/snapshot-controller
-    version: 5.0.4
+    version: 5.4.0
 
   - name: grafana-operator
     namespace: monitoring
     chart: oci://ghcr.io/grafana/helm-charts/grafana-operator
-    version: 5.23.0
+    version: 5.26.0
 
   - name: tuppr
     namespace: system-upgrade
     chart: oci://ghcr.io/home-operations/charts/tuppr
-    version: 0.1.37
+    version: 0.5.14
+
+  - name: renovate-operator
+    namespace: default
+    chart: oci://ghcr.io/mogenius/helm-charts/renovate-operator
+    version: 6.10.0
+    # Forces template mode so --include-crds can extract the CRD; HelmRelease keeps the chart default.
+    set:
+      - name: crd.mode
+        value: template
 

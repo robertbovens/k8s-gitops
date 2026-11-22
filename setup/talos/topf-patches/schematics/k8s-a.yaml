@@ -1,0 +1,8 @@
+customization:
+  systemExtensions:
+    officialExtensions:
+      - siderolabs/qemu-guest-agent
+      - siderolabs/i915
+      - siderolabs/intel-ucode
+      - siderolabs/mei
+      - siderolabs/nfsrahead

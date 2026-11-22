@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -26,7 +26,7 @@ spec:
           app:
             image:
               repository: ghcr.io/advplyr/audiobookshelf
-              tag: 2.35.0@sha256:89276ff2e0b3d2f07dd334b641f27a34ab7f02e1047c60b7b8a30126cb0813a5
+              tag: 2.38.0@sha256:60064c23f32fd9099fd39e82c5132c51701d1221135bbca04cd099b589e1edc3
             env:
               TZ: "America/New_York"
               AUDIOBOOKSHELF_UID: 1001
@@ -81,8 +81,6 @@ spec:
 
     route:
       app:
-        annotations:
-          external-dns.alpha.kubernetes.io/external: "true"
         parentRefs:
           - name: public
             namespace: kube-system
@@ -90,8 +88,6 @@ spec:
         hostnames:
           - &host abs.eviljungle.com
       internal:
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
         parentRefs:
           - name: internal
             namespace: kube-system

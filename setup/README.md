@@ -19,20 +19,32 @@ Flux GitOps configuration files which are the entrypoint for flux operating the 
 
 Talos Linux configuration for all cluster nodes.  See [talos/](talos/README.md) for details on the nodes and talos configuration
 
-## talos setup & bootstrapping
+## full cluster bootstrap
 
 (run from the repo root)
 
-Use talhelper to generate the config files in the `clusterconfig` directory.
+For a fresh cluster, this runs the entire flow below in order (secrets ->
+render/validate -> Talos bootstrap -> apps), prompting once before starting:
 
 ```shell
-task talos:generate-clusterconfig
+just bootstrap cluster
+```
+
+## talos setup & bootstrapping
+
+The individual steps, useful for recovery/re-running a single stage:
+
+Generate the secrets bundle and render the machine configs locally for validation.
+
+```shell
+just talos generate-secrets
+just talos render-clusterconfig
 ```
 
 Bootstrap the talos nodes. It may take some time for the cluster to be ready.
 
 ```shell
-task k8s-bootstrap:talos
+just bootstrap talos
 ```
 
 ## kubernetes setup & bootstrapping
@@ -40,5 +52,5 @@ task k8s-bootstrap:talos
 Bootstrap the kubernetes cluster with required prerequisites (cilium CNI, CRDs, flux, etc).
 
 ```shell
-task k8s-bootstrap:apps
+just bootstrap apps
 ```

@@ -1,0 +1,39 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/external-secrets.io/externalsecret_v1.json
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: silo-postgres-user
+  namespace: default
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: onepassword-connect
+  target:
+    name: silo-postgres-user
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: silo
+        password: "{{ .SILO_POSTGRES_PASS }}"
+  dataFrom:
+    - extract:
+        key: silo
+---
+# yaml-language-server: $schema=https://kubernetes-schemas.pages.dev/postgresql.cnpg.io/database_v1.json
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: postgres-silo
+  namespace: default
+spec:
+  name: silo
+  owner: silo
+  cluster:
+    name: postgres
+  extensions:
+    - name: vector
+      ensure: present

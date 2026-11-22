@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -22,13 +22,41 @@ spec:
         seccompProfile:
           type: RuntimeDefault
 
+    externalSecrets:
+      teslamate:
+        secretStoreRef:
+          kind: ClusterSecretStore
+          name: onepassword-connect
+        target:
+          name: teslamate-secret
+          template:
+            data:
+              # Teslamate
+              MQTT_PASSWORD: "{{ .MQTT_PASSWORD }}"
+              ENCRYPTION_KEY: "{{ .TESLAMATE_ENCRYPTION_KEY }}"
+              DATABASE_NAME: teslamate
+              DATABASE_HOST: postgres-rw.default.svc.cluster.local
+              DATABASE_PASS: "{{ .TESLAMATE_POSTGRES_PASS }}"
+              DATABASE_USER: "{{ .TESLAMATE_POSTGRES_USER }}"
+              # Postgres Init
+              INIT_POSTGRES_DBNAME: teslamate
+              INIT_POSTGRES_HOST: postgres-rw.default.svc.cluster.local
+              INIT_POSTGRES_SUPER_PASS: "{{ .POSTGRES_SUPER_PASS }}"
+              INIT_POSTGRES_PASS: "{{ .TESLAMATE_POSTGRES_PASS }}"
+              INIT_POSTGRES_USER: "{{ .TESLAMATE_POSTGRES_USER }}"
+        dataFrom:
+          - extract:
+              key: teslamate
+          - extract:
+              key: cloudnative-pg
+
     controllers:
       teslamate:
         initContainers:
           init-db:
             image:
               repository: ghcr.io/home-operations/postgres-init
-              tag: 18@sha256:5086f94abc783f1147d7c2a32c01db00ab594820026e4f6a82ac2af3dbde7fc7
+              tag: 18@sha256:6d4cfa4b8d343eb6fa0de8dd9ec416a2007f346bb631fc8e246e1f39eee6c4aa
               pullPolicy: IfNotPresent
             envFrom:
               - secretRef:
@@ -43,12 +71,13 @@ spec:
           main:
             image:
               repository: teslamate/teslamate
-              tag: 3.0.0@sha256:6569026b73bd657455bbec05965d07fa30b6d4d70eaab0bd5b343231c0429167
+              tag: 4.5.0@sha256:a285b02171a789cf2af5075502d2ec9034b58a42db777a30ae86aef2d0c12af4
             env:
               TZ: "America/New_York"
               DISABLE_MQTT: "false"
               MQTT_USERNAME: "mqtt"
-              MQTT_HOST: "emqx-listeners"
+              MQTT_HOST: "mosquitto"
+              MQTT_HOME_ASSISTANT_DISCOVERY: "true"
             envFrom: &envFrom
               - secretRef:
                   name: teslamate-secret
@@ -65,6 +94,19 @@ spec:
                   timeoutSeconds: 5
                   failureThreshold: 3
               readiness: *probes
+              # 4.1.0 runs a one-time Ecto migration synchronously before the
+              # HTTP server starts; give it headroom on this long-lived DB.
+              startup:
+                enabled: true
+                custom: true
+                spec:
+                  httpGet:
+                    path: /
+                    port: 4000
+                  initialDelaySeconds: 0
+                  periodSeconds: 15
+                  timeoutSeconds: 5
+                  failureThreshold: 60
             resources:
               requests:
                 cpu: 50m
@@ -86,9 +128,6 @@ spec:
     route:
       main:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system

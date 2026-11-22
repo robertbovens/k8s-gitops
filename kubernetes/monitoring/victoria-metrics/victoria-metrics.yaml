@@ -11,7 +11,7 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    tag: 0.80.0
+    tag: 0.98.1
   url: oci://ghcr.io/victoriametrics/helm-charts/victoria-metrics-k8s-stack
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
@@ -46,19 +46,35 @@ spec:
       enabled: true
       grafanaOperator:
         enabled: true
+        spec:
+          instanceSelector:
+            matchLabels:
+              dashboards: grafana
+          folder: monitoring   # explicit; previously implied by CR namespace
 
     defaultRules:
-      create: true
       rules:
         # Disabled because NFS zero-scalers intentionally run at maxReplicas=1
         KubeHpaMaxedOut:
           create: false
+        # Disabled: upstream expr (count(up == 0) without(...)) returns empty
+        # (not zero) when nothing is down, which RecordingRulesNoData reads as
+        # NoData and alerts on. Replaced by a fixed version in prometheus-rules/
+        # (adds "or vector(0)" so it always returns data).
+        "count:up0":
+          create: false
+        # Disabled; replaced by prometheus-rules/vmalert-meta.yaml
+        AlertingRulesError:
+          create: false
+        RecordingRulesError:
+          create: false
       groups:
-        k8sContainerMemorySwap:
+        # renamed from k8sContainerMemorySwap (upstream key change in chart 0.85.0)
+        k8s.rules.container_memory_swap:
           create: false
         # Disabled because kube-scheduler metrics produce no useful data
         # (scheduler is mostly idle, histogram_quantile returns empty results)
-        kubeScheduler:
+        kube-scheduler.rules:
           create: false
 
     vmsingle:
@@ -76,32 +92,26 @@ spec:
               storage: 60Gi
         extraArgs:
           memory.allowedPercent: "75"
+          # default (2x node CPUs = 16) gets exceeded when vmalert's ~90+ rule
+          # groups tick at once, causing bursts of 429s that flap
+          # AlertingRulesError/RecordingRulesError
+          search.maxConcurrentRequests: "32"
         resources:
           limits:
-            memory: 3Gi
+            # raised from 3Gi - 30d peak was 3062Mi, essentially pinned at limit
+            memory: 4Gi
           requests:
-            cpu: 530m
-            memory: 1.5Gi
+            cpu: 1000m
+            memory: 2Gi
 
       route:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system
             sectionName: https
         hostnames:
           - vmsingle.eviljungle.com
-        rules:
-          - matches:
-              - path:
-                  type: PathPrefix
-                  value: /
-            backendRefs:
-              - name: vmsingle-stack
-                port: 8428
 
     alertmanager:
       enabled: true
@@ -118,23 +128,12 @@ spec:
                   storage: 1Gi
       route:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system
             sectionName: https
         hostnames:
           - vmalertmanager.eviljungle.com
-        rules:
-          - matches:
-              - path:
-                  type: PathPrefix
-                  value: /
-            backendRefs:
-              - name: vmalertmanager-stack
-                port: 9093
 
       config:
         route:
@@ -169,7 +168,7 @@ spec:
             # Route 4: Critical Kubernetes/application alerts - group by namespace
             - matchers:
                 - severity = "critical"
-                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|VolSync.*|Envoy.*|PG.*"
+                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|Kopiur.*|Envoy.*|PG.*"
               receiver: 'critical-discord'
               group_by: ['alertname', 'namespace']
               group_wait: 10s
@@ -178,7 +177,7 @@ spec:
             # Route 5: Warning Kubernetes/application alerts - group by namespace
             - matchers:
                 - severity = "warning"
-                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|VolSync.*|Envoy.*|PG.*"
+                - alertname=~".*Pod.*|.*Container.*|.*Deployment.*|Cert.*|Flux.*|Kopiur.*|Envoy.*|PG.*"
               receiver: 'warning-discord'
               group_by: ['alertname', 'namespace']
               continue: false
@@ -266,23 +265,12 @@ spec:
         evaluationInterval: 15s
       route:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system
             sectionName: https
         hostnames:
           - vmalert.eviljungle.com
-        rules:
-          - matches:
-              - path:
-                  type: PathPrefix
-                  value: /
-            backendRefs:
-              - name: vmalert-stack
-                port: 8080
 
     vmagent:
       enabled: true
@@ -305,23 +293,12 @@ spec:
 
       route:
         enabled: true
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         parentRefs:
           - name: internal
             namespace: kube-system
             sectionName: https
         hostnames:
           - vmagent.eviljungle.com
-        rules:
-          - matches:
-              - path:
-                  type: PathPrefix
-                  value: /
-            backendRefs:
-              - name: vmagent-stack
-                port: 8429
     grafana:
       enabled: false
     prometheus-node-exporter:

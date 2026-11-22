@@ -1,5 +1,5 @@
 ---
-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v4.schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/other/app-template/schemas/helmrelease-helm-v2.schema.json
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
@@ -29,9 +29,9 @@ spec:
               - hosts:
                   - 1.1.1.1              # Cloudflare Primary
                   - 1.0.0.1              # Cloudflare Secondary
-                  - 8.8.8.8              # Google Primary
+                  - 208.67.222.222       # OpenDNS
                   - 9.9.9.9              # Quad9 Primary
-                  # 149.112.112.112 is used for WAN2 gateway monitoring in OPNsense
+                  # 8.8.8.8 and 8.8.4.4 are OPNsense gateway monitor IPs, do not probe
                 interval: 1s
                 network: ip4
                 protocol: icmp
@@ -53,7 +53,7 @@ spec:
           app:
             image:
               repository: quay.io/superq/smokeping-prober
-              tag: v0.10.0@sha256:3717411629519de66c7b4ff767f61766c71b8d0d3a80707ae4c970d4e47f6cf6
+              tag: v0.12.0@sha256:a8f38bef71dfddb7a11bcfccdf88ba122cad5ffe0b35e0eb606e0010a24a7f1f
             args:
               - --config.file=/config/smokeping.yaml
               - --web.listen-address=:9374
@@ -87,7 +87,7 @@ spec:
           healthcheck:
             image:
               repository: busybox
-              tag: 1.38.0@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+              tag: 1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
             command:
               - /bin/sh
               - -c

@@ -11,7 +11,7 @@ spec:
     mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
     operation: copy
   ref:
-    tag: v1.19.5
+    tag: 1.21.2
   url: oci://ghcr.io/rook/rook-ceph-cluster
 ---
 # yaml-language-server: $schema=https://raw.githubusercontent.com/fluxcd-community/flux2-schemas/main/helmrelease-helm-v2.json
@@ -45,6 +45,11 @@ spec:
           bdev_async_discard_threads: "1" # quote
           osd_class_update_on_start: "false" # quote
           device_failure_prediction_mode: local # requires mgr module
+          osd_memory_target: "2147483648" # 2Gi - bound BlueStore cache to stop OOMKills
+        mon:
+          mon_compact_on_trim: "false" # quote, no forced full compaction after each paxos trim
+        mgr:
+          log_max_recent: "100" # quote, mgr OOM workaround (rook#17786)
       # TODO: Enable the following options whenever deploying to a new cluster
       # cleanupPolicy:
       #   wipeDevicesFromOtherClusters: true
@@ -59,6 +64,23 @@ spec:
         urlPrefix: /
         ssl: false
         prometheusEndpoint: http://vmsingle-stack.monitoring.svc.cluster.local:8428
+      healthCheck:
+        livenessProbe:
+          mon:
+            probe:
+              timeoutSeconds: 10
+              failureThreshold: 6 # tolerate a transient disk stall instead of killing the mon
+        muteHealthWarning:
+          # CVE-2025-30156: CSI client keys are pinned to aes (aes256k requires kernel 7.0+)
+          # - accepted until node kernels catch up
+          AUTH_INSECURE_CLIENT_KEY_TYPE:
+            policy: mute
+          AUTH_INSECURE_KEYS_ALLOWED:
+            policy: mute
+          AUTH_INSECURE_KEYS_CREATABLE:
+            policy: mute
+          AUTH_INSECURE_ROTATING_SERVICE_KEY_TYPE: # transient for 2-3h during daemon key rotation
+            policy: mute
       mgr:
         count: 1
         modules:
@@ -69,12 +91,19 @@ spec:
           - name: pg_autoscaler
             enabled: true
           - name: rook
-            enabled: true
+            enabled: false # rook/rook#18124: node_proxy_fullreport() crashes mgr every scrape on Tentacle, no fix yet
           - name: telemetry
             enabled: true
       mon:
         count: 3
         allowMultiplePerNode: false
+      security:
+        cephx:
+          daemon:
+            keyRotationPolicy: KeyGeneration
+            keyGeneration: 2 # CVE-2025-30156: rotate mon/mgr/osd keys off insecure aes cephx key type
+          csi:
+            keyType: aes # aes256k requires kernel 7.0+
       network:
         provider: host
         connections:
@@ -83,9 +112,9 @@ spec:
         mgr:
           requests:
             cpu: 100m
-            memory: 1Gi
-          limits:
             memory: 1536Mi
+          limits:
+            memory: 2Gi # raised from 1536Mi - mgr was pinned at limit and OOMKilling
         mon:
           requests:
             cpu: 35m
@@ -95,9 +124,9 @@ spec:
         osd:
           requests:
             cpu: 100m
-            memory: 1Gi
-          limits:
             memory: 2Gi
+          limits:
+            memory: 3Gi
       storage:
         useAllNodes: true
         useAllDevices: true
@@ -106,9 +135,6 @@ spec:
 
     route:
       dashboard:
-        annotations:
-          external-dns.alpha.kubernetes.io/internal: "true"
-          external-dns.alpha.kubernetes.io/target: "10.0.6.151"
         host:
           name: rook.eviljungle.com
           path: /

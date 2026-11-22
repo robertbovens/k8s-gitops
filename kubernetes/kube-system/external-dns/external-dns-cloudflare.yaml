@@ -21,23 +21,20 @@ spec:
     policy: sync
     triggerLoopOnEvent: true
     
-    # Sources to watch for DNS records
+    # Sources to watch for DNS records - scoped to the "public" Gateway via --gateway-name below, so only routes attached to it are managed here
     sources:
-      - ingress
-      - service
       - gateway-httproute
-      - gateway-grpcroute
-    
+
     # Only manage eviljungle.com domain
     domainFilters:
       - eviljungle.com
-    
+
     # Unique identifier for this external-dns instance
     txtOwnerId: k8s-external
-    
+
     # Extra arguments for external-dns
     extraArgs:
-      - --annotation-filter=external-dns.alpha.kubernetes.io/external=true
+      - --gateway-name=public
       - --cloudflare-proxied
     
     # Cloudflare configuration (using Global API Key)
@@ -66,11 +63,6 @@ spec:
     
     # Logging
     logLevel: info
-    
-    # Metrics
-    metrics:
-      enabled: true
-      port: 7979
     
     # Service monitor for Prometheus
     serviceMonitor:

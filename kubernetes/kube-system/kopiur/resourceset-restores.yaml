@@ -1,0 +1,94 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/controlplaneio-fluxcd/flux-operator/main/config/crd/bases/fluxcd.controlplane.io_resourcesets.yaml
+# ResourceSet for kopiur bootstrapped PVCs.
+# Creates per-app Restore (passive populator) + PVC resources.
+# On cluster bootstrap: PVC auto-restores from latest snapshot.
+# On fresh install with no snapshot: provisions an empty volume (onMissingSnapshot: Continue).
+# App definitions are shared via the kopiur-apps ResourceSetInputProvider.
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSet
+metadata:
+  name: kopiur-restores
+  namespace: kube-system
+spec:
+  dependsOn:
+    - apiVersion: fluxcd.controlplane.io/v1
+      kind: ResourceSet
+      name: kopiur-snapshots
+      namespace: kube-system
+      ready: true
+    - apiVersion: helm.toolkit.fluxcd.io/v2
+      kind: HelmRelease
+      name: kopiur
+      namespace: kube-system
+      ready: true
+
+  # Passive-populator Restores stay AwaitingClaim until a PVC claims them,
+  # and kopiur doesn't refresh observedGeneration on a terminal Restore after
+  # spec is re-applied -- kstatus reads that as permanently InProgress, so
+  # wait: true here can never settle (kopiur-restores errored every
+  # reconcile since the migration). kopiur-snapshots still waits fine.
+  wait: false
+
+  inputsFrom:
+    - name: kopiur-apps
+
+  resourcesTemplate: |
+    <<- range $app := inputs.apps >>
+    ---
+    # Restore (passive populator) for bootstrap restore
+    apiVersion: kopiur.home-operations.com/v1alpha1
+    kind: Restore
+    metadata:
+      name: << $app.app >>-bootstrap
+      namespace: << get $app "namespace" | default "default" >>
+      labels:
+        kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+    spec:
+      source:
+        fromPolicy:
+          name: << $app.app >>
+          namespace: << get $app "namespace" | default "default" >>
+      target:
+        populator: {}
+      policy:
+        onMissingSnapshot: Continue
+      # Same reasoning as the SnapshotPolicy: the repository Secret lives in
+      # kube-system, restores run in the app's own namespace.
+      credentialProjection:
+        enabled: true
+      # Matches the SnapshotPolicy's mover.cache.capacity override -- without
+      # this, every Restore silently falls back to the repository's 1Gi
+      # moverDefaults.cache regardless of the app's cacheCapacity input,
+      # which is too small for large/many-small-file trees (minecraft world
+      # saves) and fails restore with "no space left on device".
+      mover:
+        cache:
+          capacity: << get $app "cacheCapacity" | default inputs.defaults.cacheCapacity >>
+          storageClassName: ceph-block
+          mode: Ephemeral
+    ---
+    # PVC with dataSourceRef for automatic bootstrap restore. Only ever
+    # creates the PVC on a fresh cluster/namespace (dataSourceRef is
+    # immutable, so this template never converges on an already-bound one).
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: << printf "%s-%s" $app.app (get $app "pvcSuffix" | default inputs.defaults.pvcSuffix) >>
+      namespace: << get $app "namespace" | default "default" >>
+      labels:
+        kustomize.toolkit.fluxcd.io/ssa: IfNotPresent
+      annotations:
+        fluxcd.controlplane.io/prune: disabled
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      dataSourceRef:
+        apiGroup: kopiur.home-operations.com
+        kind: Restore
+        name: << $app.app >>-bootstrap
+      storageClassName: ceph-block
+      resources:
+        requests:
+          storage: << get $app "capacity" | default inputs.defaults.capacity >>
+    <<- end >>
